@@ -72,3 +72,23 @@ latexmk -pdf -interaction=nonstopmode Quantum_Energy_Harvesting_Paper_English.te
 
 ## Authors
 - Kengo Imai et al.
+
+## Citation
+
+If you use this code or data in your research, please cite our work. (Please update the arXiv ID and URL once published):
+
+```bibtex
+@misc{imai2026maxwell,
+  author = {Imai, Kengo and others},
+  title = {Breaking the Second Law Limits: From Autonomous Maxwell's Demons to Quantum Landauer Energy Harvesters},
+  year = {2026},
+  howpublished = {\url{https://github.com/kenkenpa36/Maxwells-Demon-Energy-Harvester}},
+}
+```
+
+## License
+
+This project is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0).
+
+This means you are free to share and adapt the material for non-commercial purposes, provided you give appropriate credit. **Commercial use is strictly prohibited.** 
+For details, see the [LICENSE](LICENSE) file.
