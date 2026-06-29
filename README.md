@@ -9,21 +9,32 @@ This repository contains the source code, numerical simulations, and the researc
 3. **Beating the Landauer Limit**: Simulation of the "Quantum Landauer Loophole", achieving negative erasure costs and net-positive power generation via maximum quantum entanglement at room temperature.
 4. **Autonomous Strategy Discovery (DRL)**: Gymnasium-compatible environments for quantum engines, optimized using Deep Reinforcement Learning (Recurrent PPO via Stable Baselines 3) to autonomously discover robust energy-harvesting strategies.
 
-## Requirements
+## System Requirements & Environment
 
-Ensure you have Python 3.8+ installed. The main dependencies are:
+To run the quantum thermodynamic simulations and train the Deep Reinforcement Learning models (Recurrent PPO), the following environment is recommended:
 
-- `qutip` (Quantum Toolbox in Python)
-- `numpy`
-- `matplotlib`
-- `gymnasium`
-- `stable-baselines3`
-- `sb3-contrib` (for RecurrentPPO)
-- `torch`
+### Hardware Requirements
+- **OS**: Linux (Ubuntu 20.04/22.04 recommended), macOS, or Windows (WSL2)
+- **CPU**: Multi-core processor (4+ cores recommended for parallel QuTiP master equation simulations)
+- **RAM**: 16 GB minimum (32 GB recommended for the macroscopic 10-dot chain Bayesian simulations)
+- **GPU**: NVIDIA GPU (Optional, but highly recommended for accelerating PyTorch / Stable Baselines 3 training)
 
-You can install them via pip:
+### Software & Dependencies
+- **Python**: 3.8 or higher
+
+Main libraries required:
+- `qutip` (Quantum Toolbox in Python - for core quantum dynamics)
+- `torch` (PyTorch - for neural network backend)
+- `gymnasium` (RL environment API)
+- `stable-baselines3` (PPO implementation)
+- `sb3-contrib` (RecurrentPPO implementation)
+- `numpy`, `matplotlib`, `scipy`
+
+### Installation
+
+You can install all dependencies via pip:
 ```bash
-pip install qutip numpy matplotlib gymnasium stable-baselines3 sb3-contrib torch
+pip install qutip numpy scipy matplotlib gymnasium stable-baselines3 sb3-contrib torch
 ```
 
 ## Repository Structure
