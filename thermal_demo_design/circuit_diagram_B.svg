@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 650" width="1000" height="650">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+      .title { font-size: 18px; font-weight: bold; fill: #1a1a2e; }
+      .subtitle { font-size: 12px; fill: #555; }
+      .component-label { font-size: 12px; font-weight: bold; fill: #16213e; }
+      .value-label { font-size: 10px; fill: #0f3460; }
+      .pin-label { font-size: 9px; fill: #6c757d; }
+      .wire { stroke: #2c3e50; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wire-pos { stroke: #e74c3c; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wire-neg { stroke: #3498db; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wire-out { stroke: #27ae60; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wire-store { stroke: #9b59b6; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .component-body { stroke: #2c3e50; stroke-width: 2; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#27ae60"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1000" height="650" fill="#fafbfc" rx="8"/>
+  
+  <!-- Title -->
+  <text x="500" y="30" text-anchor="middle" class="title">構成B: 昇圧版 回路図 (CJMCU-3108 モジュール使用)</text>
+  <text x="500" y="48" text-anchor="middle" class="subtitle">ペルチェ素子 → LTC3108昇圧 → スーパーキャパシタ蓄電 → LED点灯（ΔT ≥ 5℃ で動作）</text>
+
+  <!-- ===== PELTIER ELEMENT ===== -->
+  <g transform="translate(40, 120)">
+    <rect x="0" y="0" width="130" height="160" rx="8" fill="#ecf0f1" class="component-body"/>
+    
+    <!-- Hot side indicator -->
+    <rect x="5" y="5" width="120" height="30" rx="4" fill="#ff6b6b" opacity="0.3"/>
+    <text x="65" y="24" text-anchor="middle" font-size="10" fill="#c0392b" font-weight="bold">🔥 高温側 (T_H)</text>
+    
+    <!-- Cold side indicator -->
+    <rect x="5" y="125" width="120" height="30" rx="4" fill="#74b9ff" opacity="0.3"/>
+    <text x="65" y="144" text-anchor="middle" font-size="10" fill="#2980b9" font-weight="bold">❄️ 低温側 (T_C)</text>
+    
+    <!-- Internal P-N pairs -->
+    <g opacity="0.6">
+      <rect x="15" y="42" width="10" height="25" fill="#e74c3c" rx="1"/>
+      <rect x="28" y="42" width="10" height="25" fill="#3498db" rx="1"/>
+      <rect x="45" y="42" width="10" height="25" fill="#e74c3c" rx="1"/>
+      <rect x="58" y="42" width="10" height="25" fill="#3498db" rx="1"/>
+      <rect x="75" y="42" width="10" height="25" fill="#e74c3c" rx="1"/>
+      <rect x="88" y="42" width="10" height="25" fill="#3498db" rx="1"/>
+      
+      <rect x="15" y="78" width="10" height="25" fill="#e74c3c" rx="1"/>
+      <rect x="28" y="78" width="10" height="25" fill="#3498db" rx="1"/>
+      <rect x="45" y="78" width="10" height="25" fill="#e74c3c" rx="1"/>
+      <rect x="58" y="78" width="10" height="25" fill="#3498db" rx="1"/>
+      <rect x="75" y="78" width="10" height="25" fill="#e74c3c" rx="1"/>
+      <rect x="88" y="78" width="10" height="25" fill="#3498db" rx="1"/>
+    </g>
+    
+    <!-- Terminal circles -->
+    <circle cx="35" cy="160" r="6" fill="#e74c3c"/>
+    <text x="35" y="178" text-anchor="middle" font-size="12" fill="#e74c3c" font-weight="bold">+ (赤)</text>
+    <circle cx="95" cy="160" r="6" fill="#3498db"/>
+    <text x="95" y="178" text-anchor="middle" font-size="12" fill="#3498db" font-weight="bold">− (黒)</text>
+    
+    <text x="65" y="-8" text-anchor="middle" class="component-label">TEC1-12706</text>
+  </g>
+
+  <!-- ===== CJMCU-3108 MODULE ===== -->
+  <g transform="translate(300, 100)">
+    <!-- Module body -->
+    <rect x="0" y="0" width="260" height="240" rx="10" fill="#2d3436" class="component-body" stroke="#636e72"/>
+    
+    <!-- PCB color -->
+    <rect x="5" y="5" width="250" height="230" rx="8" fill="#00695c"/>
+    
+    <!-- IC chip -->
+    <rect x="70" y="60" width="120" height="60" rx="4" fill="#263238" stroke="#455a64" stroke-width="1.5"/>
+    <text x="130" y="85" text-anchor="middle" font-size="11" fill="#b0bec5" font-weight="bold">LTC3108</text>
+    <text x="130" y="100" text-anchor="middle" font-size="8" fill="#78909c">Ultralow Voltage</text>
+    <text x="130" y="112" text-anchor="middle" font-size="8" fill="#78909c">Step-Up Converter</text>
+    
+    <!-- Pin dot indicator -->
+    <circle cx="78" y="68" r="3" fill="#ff5722"/>
+    
+    <!-- Transformer (on PCB) -->
+    <rect x="20" y="65" width="40" height="50" rx="4" fill="#37474f" stroke="#546e7a" stroke-width="1"/>
+    <text x="40" y="85" text-anchor="middle" font-size="8" fill="#cfd8dc">1:100</text>
+    <text x="40" y="95" text-anchor="middle" font-size="7" fill="#90a4ae">TRANS</text>
+    
+    <!-- Module title -->
+    <text x="130" y="25" text-anchor="middle" font-size="14" fill="#e0f2f1" font-weight="bold">CJMCU-3108</text>
+    <text x="130" y="42" text-anchor="middle" font-size="10" fill="#80cbc4">Energy Harvesting Module</text>
+    
+    <!-- Input pins (left side) -->
+    <rect x="-8" y="80" width="16" height="12" rx="2" fill="#ffd54f" stroke="#ff8f00"/>
+    <text x="-25" y="90" text-anchor="end" class="pin-label" fill="#e74c3c" font-weight="bold">VIN+</text>
+    
+    <rect x="-8" y="110" width="16" height="12" rx="2" fill="#ffd54f" stroke="#ff8f00"/>
+    <text x="-25" y="120" text-anchor="end" class="pin-label" fill="#3498db" font-weight="bold">GND</text>
+    
+    <!-- Output pins (right side) -->
+    <rect x="252" y="70" width="16" height="12" rx="2" fill="#ffd54f" stroke="#ff8f00"/>
+    <text x="285" y="80" text-anchor="start" class="pin-label" fill="#27ae60" font-weight="bold">VOUT</text>
+    
+    <rect x="252" y="100" width="16" height="12" rx="2" fill="#ffd54f" stroke="#ff8f00"/>
+    <text x="285" y="110" text-anchor="start" class="pin-label" fill="#9b59b6" font-weight="bold">VSTORE</text>
+    
+    <rect x="252" y="130" width="16" height="12" rx="2" fill="#ffd54f" stroke="#ff8f00"/>
+    <text x="285" y="140" text-anchor="start" class="pin-label" fill="#e67e22" font-weight="bold">VLDO</text>
+    
+    <rect x="252" y="160" width="16" height="12" rx="2" fill="#ffd54f" stroke="#ff8f00"/>
+    <text x="285" y="170" text-anchor="start" class="pin-label" fill="#2c3e50" font-weight="bold">PGD</text>
+    
+    <rect x="252" y="190" width="16" height="12" rx="2" fill="#ffd54f" stroke="#ff8f00"/>
+    <text x="285" y="200" text-anchor="start" class="pin-label" fill="#3498db" font-weight="bold">GND</text>
+    
+    <!-- VS1/VS2 jumpers for voltage selection -->
+    <rect x="80" y="140" width="100" height="45" rx="4" fill="#004d40" stroke="#00897b" stroke-width="1"/>
+    <text x="130" y="158" text-anchor="middle" font-size="9" fill="#a7ffeb" font-weight="bold">電圧選択 (VS1/VS2)</text>
+    <text x="130" y="173" text-anchor="middle" font-size="8" fill="#80cbc4">VS1=L, VS2=L → 2.35V</text>
+    <text x="130" y="183" text-anchor="middle" font-size="8" fill="#80cbc4">VS1=H, VS2=L → 3.30V ✓</text>
+    
+    <!-- Capacitors on board -->
+    <text x="130" y="215" text-anchor="middle" font-size="8" fill="#80cbc4">内蔵コンデンサ: 4.7µF, 1µF</text>
+  </g>
+
+  <!-- ===== WIRING ===== -->
+  
+  <!-- Peltier + to VIN+ -->
+  <path d="M 75 280 L 75 310 L 220 310 L 220 186 L 292 186" class="wire-pos"/>
+  <text x="200" y="305" text-anchor="middle" font-size="10" fill="#e74c3c">赤線 (+)</text>
+  
+  <!-- Peltier - to GND -->
+  <path d="M 135 280 L 135 340 L 250 340 L 250 216 L 292 216" class="wire-neg"/>
+  <text x="200" y="355" text-anchor="middle" font-size="10" fill="#3498db">黒線 (−)</text>
+
+  <!-- VSTORE to Supercapacitor -->
+  <path d="M 568 206 L 630 206 L 630 350" class="wire-store"/>
+  
+  <!-- Supercapacitor -->
+  <g transform="translate(600, 355)">
+    <!-- Capacitor symbol (polarized) -->
+    <line x1="10" y1="0" x2="50" y2="0" stroke="#9b59b6" stroke-width="3"/>
+    <line x1="10" y1="15" x2="50" y2="15" stroke="#9b59b6" stroke-width="3"/>
+    <path d="M 10 15 Q 30 25 50 15" fill="none" stroke="#9b59b6" stroke-width="2"/>
+    <!-- + mark -->
+    <text x="55" y="5" font-size="12" fill="#9b59b6" font-weight="bold">+</text>
+    
+    <rect x="0" y="-10" width="65" height="45" rx="5" fill="none" stroke="#9b59b6" stroke-width="1" stroke-dasharray="3,3"/>
+    
+    <text x="30" y="48" text-anchor="middle" class="component-label">C_store</text>
+    <text x="30" y="62" text-anchor="middle" class="value-label">0.47F / 5.5V</text>
+    <text x="30" y="74" text-anchor="middle" class="value-label">スーパーキャパシタ</text>
+  </g>
+  
+  <!-- Supercap GND -->
+  <path d="M 630 370 L 630 460 L 830 460" class="wire-neg"/>
+  
+  <!-- VOUT to Resistor -->
+  <path d="M 568 176 L 680 176" class="wire-out"/>
+  
+  <!-- Current limiting resistor for LED -->
+  <g transform="translate(680, 162)">
+    <rect x="0" y="0" width="60" height="28" rx="4" fill="#fff3cd" class="component-body"/>
+    <polyline points="0,14 8,4 16,24 24,4 32,24 40,4 48,24 56,14 60,14" 
+              fill="none" stroke="#856404" stroke-width="1.5"/>
+    <text x="30" y="45" text-anchor="middle" class="component-label">R1</text>
+    <text x="30" y="58" text-anchor="middle" class="value-label">100Ω</text>
+  </g>
+  
+  <!-- Resistor to LED -->
+  <path d="M 740 176 L 790 176 L 790 240" class="wire-out"/>
+  
+  <!-- LED -->
+  <g transform="translate(765, 240)">
+    <polygon points="0,0 50,0 25,40" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <line x1="3" y1="40" x2="47" y2="40" stroke="#2e7d32" stroke-width="2.5"/>
+    
+    <!-- Light rays -->
+    <line x1="52" y1="8" x2="65" y2="-2" stroke="#ffc107" stroke-width="1.5"/>
+    <line x1="55" y1="18" x2="68" y2="12" stroke="#ffc107" stroke-width="1.5"/>
+    <polygon points="63,-4 67,0 61,0" fill="#ffc107"/>
+    <polygon points="66,10 70,14 64,13" fill="#ffc107"/>
+    
+    <text x="25" y="58" text-anchor="middle" class="component-label">LED1</text>
+    <text x="25" y="70" text-anchor="middle" class="value-label">緑色 LED</text>
+    <text x="25" y="82" text-anchor="middle" class="value-label">Vf=2.0V, 10mA</text>
+  </g>
+  
+  <!-- LED to GND -->
+  <path d="M 790 280 L 790 460 L 830 460" class="wire-neg"/>
+  
+  <!-- GND bus -->
+  <line x1="830" y1="460" x2="890" y2="460" stroke="#3498db" stroke-width="2.5"/>
+  
+  <!-- GND symbol -->
+  <g transform="translate(860, 460)">
+    <line x1="0" y1="0" x2="30" y2="0" stroke="#3498db" stroke-width="2.5"/>
+    <line x1="5" y1="8" x2="25" y2="8" stroke="#3498db" stroke-width="2"/>
+    <line x1="10" y1="16" x2="20" y2="16" stroke="#3498db" stroke-width="1.5"/>
+  </g>
+  
+  <!-- Module GND to GND bus -->
+  <path d="M 568 296 L 600 296 L 600 460 L 830 460" class="wire-neg"/>
+
+  <!-- PGD indicator (optional) -->
+  <g transform="translate(600, 252)">
+    <rect x="0" y="0" width="110" height="30" rx="5" fill="#fef3c7" stroke="#f59e0b" stroke-width="1"/>
+    <text x="55" y="13" text-anchor="middle" font-size="9" fill="#92400e" font-weight="bold">PGD: Power Good</text>
+    <text x="55" y="25" text-anchor="middle" font-size="8" fill="#b45309">LED2追加で状態表示可</text>
+  </g>
+  <path d="M 568 266 L 600 266" stroke="#e67e22" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
+
+  <!-- Current flow arrow -->
+  <g transform="translate(680, 130)">
+    <line x1="0" y1="0" x2="50" y2="0" stroke="#27ae60" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    <text x="25" y="-8" text-anchor="middle" font-size="10" fill="#27ae60" font-weight="bold">電流 I</text>
+  </g>
+
+  <!-- ===== INFO BOX ===== -->
+  <g transform="translate(40, 420)">
+    <rect x="0" y="0" width="450" height="200" rx="8" fill="#f0f4f8" stroke="#90a4ae" stroke-width="1"/>
+    <text x="225" y="22" text-anchor="middle" font-size="14" fill="#263238" font-weight="bold">⚡ 動作原理 &amp; 設計ノート</text>
+    <line x1="15" y1="30" x2="435" y2="30" stroke="#cfd8dc"/>
+    
+    <text x="15" y="50" font-size="11" fill="#37474f">1. ペルチェ素子が温度差ΔTからゼーベック効果で起電力を生成</text>
+    <text x="15" y="68" font-size="11" fill="#37474f">2. LTC3108が20mV～の超低電圧を3.3Vに昇圧</text>
+    <text x="15" y="86" font-size="11" fill="#37474f">3. VSTOREピンからスーパーキャパシタにエネルギーを蓄積</text>
+    <text x="15" y="104" font-size="11" fill="#37474f">4. 蓄電完了後、VOUTからLEDに安定した電力を供給</text>
+    
+    <line x1="15" y1="114" x2="435" y2="114" stroke="#cfd8dc"/>
+    
+    <text x="15" y="134" font-size="11" fill="#e74c3c" font-weight="bold">⚠️ 注意点:</text>
+    <text x="15" y="152" font-size="10" fill="#546e7a">・ΔT=5℃ → V_in ≈ 25mV → 充電に数分かかる場合あり</text>
+    <text x="15" y="168" font-size="10" fill="#546e7a">・ΔT=20℃以上 → ほぼリアルタイムでLED点灯</text>
+    <text x="15" y="184" font-size="10" fill="#546e7a">・極性を間違えると動作しない（テスターで確認）</text>
+    <text x="15" y="200" font-size="10" fill="#546e7a">・VS1/VS2ピンの設定で出力電圧を調整可能</text>
+  </g>
+
+  <!-- Border -->
+  <rect x="2" y="2" width="996" height="646" fill="none" stroke="#dee2e6" stroke-width="2" rx="8"/>
+</svg>

@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+      .title { font-size: 18px; font-weight: bold; fill: #1a1a2e; }
+      .subtitle { font-size: 12px; fill: #555; }
+      .component-label { font-size: 13px; font-weight: bold; fill: #16213e; }
+      .value-label { font-size: 11px; fill: #0f3460; }
+      .note { font-size: 10px; fill: #777; font-style: italic; }
+      .wire { stroke: #2c3e50; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wire-pos { stroke: #e74c3c; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .wire-neg { stroke: #3498db; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .component-body { stroke: #2c3e50; stroke-width: 2; }
+      .hot-zone { fill: #ff6b6b; opacity: 0.15; }
+      .cold-zone { fill: #74b9ff; opacity: 0.15; }
+    </style>
+    <!-- Arrow marker -->
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2c3e50"/>
+    </marker>
+    <!-- Current direction arrow -->
+    <marker id="current-arrow" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#27ae60"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="500" fill="#fafbfc" rx="8"/>
+  
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" class="title">構成A: シンプル直結版 回路図</text>
+  <text x="450" y="48" text-anchor="middle" class="subtitle">ペルチェ素子 → 電流制限抵抗 → LED（ΔT ≥ 60℃ 必要）</text>
+
+  <!-- Temperature zones -->
+  <rect x="50" y="100" width="200" height="280" rx="10" class="hot-zone"/>
+  <text x="150" y="125" text-anchor="middle" font-size="14" fill="#c0392b" font-weight="bold">🔥 高温側</text>
+  <text x="150" y="142" text-anchor="middle" font-size="11" fill="#e74c3c">お湯 / ホットプレート</text>
+  <text x="150" y="158" text-anchor="middle" font-size="11" fill="#e74c3c">(60～100℃)</text>
+
+  <rect x="50" y="100" width="200" height="280" rx="10" fill="none" stroke="#e74c3c" stroke-width="1" stroke-dasharray="5,5"/>
+
+  <!-- Cold zone indicator -->
+  <rect x="50" y="320" width="200" height="60" rx="5" class="cold-zone"/>
+  <text x="150" y="345" text-anchor="middle" font-size="11" fill="#2980b9">❄️ 低温側: 氷水 / ヒートシンク (0～25℃)</text>
+
+  <!-- Peltier Element (TEG) -->
+  <g transform="translate(100, 180)">
+    <!-- Main body -->
+    <rect x="0" y="0" width="100" height="120" rx="5" fill="#ecf0f1" class="component-body"/>
+    
+    <!-- Internal thermoelectric pairs -->
+    <g opacity="0.7">
+      <!-- P-N pairs -->
+      <rect x="12" y="15" width="12" height="30" fill="#e74c3c" rx="2"/>
+      <rect x="28" y="15" width="12" height="30" fill="#3498db" rx="2"/>
+      <line x1="18" y1="15" x2="34" y2="15" stroke="#666" stroke-width="1.5"/>
+      <line x1="12" y1="45" x2="18" y2="45" stroke="#666" stroke-width="1"/>
+      <line x1="34" y1="45" x2="40" y2="45" stroke="#666" stroke-width="1"/>
+      
+      <rect x="48" y="15" width="12" height="30" fill="#e74c3c" rx="2"/>
+      <rect x="64" y="15" width="12" height="30" fill="#3498db" rx="2"/>
+      <line x1="54" y1="15" x2="70" y2="15" stroke="#666" stroke-width="1.5"/>
+      
+      <rect x="12" y="60" width="12" height="30" fill="#e74c3c" rx="2"/>
+      <rect x="28" y="60" width="12" height="30" fill="#3498db" rx="2"/>
+      <line x1="18" y1="60" x2="34" y2="60" stroke="#666" stroke-width="1.5"/>
+      
+      <rect x="48" y="60" width="12" height="30" fill="#e74c3c" rx="2"/>
+      <rect x="64" y="60" width="12" height="30" fill="#3498db" rx="2"/>
+      <line x1="54" y1="60" x2="70" y2="60" stroke="#666" stroke-width="1.5"/>
+    </g>
+    
+    <!-- Labels -->
+    <text x="50" y="110" text-anchor="middle" class="component-label">TEC1-12706</text>
+    
+    <!-- + terminal (red wire) -->
+    <circle cx="25" cy="0" r="5" fill="#e74c3c"/>
+    <text x="25" y="-8" text-anchor="middle" font-size="14" fill="#e74c3c" font-weight="bold">+</text>
+    
+    <!-- - terminal (black/blue wire) -->
+    <circle cx="75" cy="0" r="5" fill="#3498db"/>
+    <text x="75" y="-8" text-anchor="middle" font-size="14" fill="#3498db" font-weight="bold">−</text>
+  </g>
+  
+  <text x="150" y="320" text-anchor="middle" class="component-label">ペルチェ素子</text>
+  <text x="150" y="335" text-anchor="middle" class="value-label">(発電モード: ゼーベック効果)</text>
+
+  <!-- Wires from Peltier to circuit -->
+  <!-- Positive wire (red) -->
+  <path d="M 125 175 L 125 85 L 400 85" class="wire-pos"/>
+  
+  <!-- Negative wire (blue) -->
+  <path d="M 175 175 L 175 75 L 800 75 L 800 380 L 680 380" class="wire-neg"/>
+
+  <!-- Current limiting resistor -->
+  <g transform="translate(400, 70)">
+    <rect x="0" y="0" width="80" height="30" rx="5" fill="#fff3cd" class="component-body"/>
+    <!-- Resistor zigzag symbol -->
+    <polyline points="0,15 10,5 20,25 30,5 40,25 50,5 60,25 70,15 80,15" 
+              fill="none" stroke="#856404" stroke-width="2"/>
+    <text x="40" y="50" text-anchor="middle" class="component-label">R1</text>
+    <text x="40" y="65" text-anchor="middle" class="value-label">47Ω 1/4W</text>
+  </g>
+
+  <!-- Wire from resistor to LED -->
+  <path d="M 480 85 L 560 85 L 560 200" class="wire-pos"/>
+
+  <!-- LED Symbol -->
+  <g transform="translate(530, 200)">
+    <!-- Triangle -->
+    <polygon points="0,0 60,0 30,50" fill="#ffe5e5" stroke="#c0392b" stroke-width="2"/>
+    <!-- Line (cathode) -->
+    <line x1="5" y1="50" x2="55" y2="50" stroke="#c0392b" stroke-width="2.5"/>
+    
+    <!-- Light rays -->
+    <line x1="65" y1="10" x2="80" y2="-5" stroke="#f39c12" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="68" y1="20" x2="85" y2="12" stroke="#f39c12" stroke-width="1.5" stroke-linecap="round"/>
+    <polygon points="78,-7 82,-3 76,-1" fill="#f39c12"/>
+    <polygon points="83,10 87,14 81,14" fill="#f39c12"/>
+    
+    <!-- Labels -->
+    <text x="30" y="75" text-anchor="middle" class="component-label">LED1</text>
+    <text x="30" y="90" text-anchor="middle" class="value-label">赤色 LED</text>
+    <text x="30" y="105" text-anchor="middle" class="value-label">Vf=1.8V, 20mA</text>
+  </g>
+  
+  <!-- Anode marker -->
+  <text x="545" y="195" text-anchor="middle" font-size="12" fill="#c0392b" font-weight="bold">A(+)</text>
+  
+  <!-- Wire from LED cathode to negative -->
+  <path d="M 560 250 L 560 380 L 680 380" class="wire-neg"/>
+  
+  <!-- GND symbol -->
+  <g transform="translate(665, 370)">
+    <line x1="0" y1="0" x2="30" y2="0" stroke="#3498db" stroke-width="2.5"/>
+    <line x1="5" y1="8" x2="25" y2="8" stroke="#3498db" stroke-width="2"/>
+    <line x1="10" y1="16" x2="20" y2="16" stroke="#3498db" stroke-width="1.5"/>
+  </g>
+
+  <!-- Voltmeter indication -->
+  <g transform="translate(330, 140)">
+    <rect x="0" y="0" width="120" height="50" rx="8" fill="#e8f8f5" stroke="#1abc9c" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <text x="60" y="20" text-anchor="middle" font-size="11" fill="#1abc9c" font-weight="bold">テスター確認</text>
+    <text x="60" y="35" text-anchor="middle" font-size="10" fill="#16a085">開放電圧: 1.8～4V</text>
+    <text x="60" y="47" text-anchor="middle" font-size="10" fill="#16a085">(ΔT=60℃時)</text>
+  </g>
+
+  <!-- Current direction -->
+  <g transform="translate(280, 85)">
+    <line x1="0" y1="0" x2="40" y2="0" stroke="#27ae60" stroke-width="1.5" marker-end="url(#current-arrow)"/>
+    <text x="20" y="-8" text-anchor="middle" font-size="10" fill="#27ae60" font-weight="bold">I (電流)</text>
+  </g>
+
+  <!-- Calculation box -->
+  <g transform="translate(620, 130)">
+    <rect x="0" y="0" width="240" height="170" rx="8" fill="#f8f9fa" stroke="#adb5bd" stroke-width="1"/>
+    <text x="120" y="22" text-anchor="middle" font-size="13" fill="#343a40" font-weight="bold">📐 設計計算</text>
+    <line x1="10" y1="30" x2="230" y2="30" stroke="#dee2e6"/>
+    
+    <text x="15" y="50" font-size="11" fill="#495057">ゼーベック係数 α ≈ 0.05 V/K</text>
+    <text x="15" y="68" font-size="11" fill="#495057">（TEC1-12706 実測値）</text>
+    <text x="15" y="90" font-size="11" fill="#495057">ΔT = 60℃ の場合:</text>
+    <text x="15" y="108" font-size="12" fill="#e74c3c" font-weight="bold">V_oc = α × ΔT ≈ 3.0V</text>
+    <text x="15" y="128" font-size="11" fill="#495057">内部抵抗 R_int ≈ 2～3Ω</text>
+    <text x="15" y="148" font-size="11" fill="#495057">R1 = (V_oc - V_LED) / I_LED</text>
+    <text x="15" y="166" font-size="12" fill="#0f3460" font-weight="bold">R1 = (3.0-1.8)/0.02 ≈ 47Ω</text>
+  </g>
+
+  <!-- Border -->
+  <rect x="2" y="2" width="896" height="496" fill="none" stroke="#dee2e6" stroke-width="2" rx="8"/>
+</svg>
