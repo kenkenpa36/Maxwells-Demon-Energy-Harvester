@@ -1,6 +1,6 @@
 /*
  * Maxwell's Demon Energy Harvester — ESP32-C3 Deep Sleep 制御コード
- * Configuration D: 超低消費電力フィードバックエンジン
+ * Configuration D: 超低消費電力フィードバックエンジン (Diode-OR ハイブリッド自己駆動対応)
  * 
  * プロジェクト: Macroscopic Quantum Entanglement Engine 検証デバイス
  * 論文: "Breaking the Second Law Limits: From Autonomous Maxwell's Demons 
@@ -16,12 +16,23 @@
  *   抽出仕事を常に上回り、正味仕事 < 0 となっていた（ランダウアー限界の実証）。
  *   本構成では ESP32-C3 の Deep Sleep（~5μA, ~16.5μW）を活用し、
  *   悪魔のコストを 2〜3桁削減することで、正味仕事 > 0 の達成を目指す。
- *   これは論文の量子もつれによるコスト反転の古典的アナロジーであり、
- *   「測定コストの最小化」が第二法則の見かけの違反にどう寄与するかを示す。
+ *   さらに Diode-OR 回路によるハイブリッド給電構成を採用し、
+ *   USB 給電による初期起動・Serial キャリブレーションから、USB 切断後の 100% 自律自己駆動
+ *   （Self-powered mode）へのシームレスな移行を実現する。
+ * 
+ * ハイブリッド起動モード (Hybrid Startup Mode):
+ *   1. Initial Boot & Calibration:
+ *      USB を接続して初期起動。Serial モニターによる動作ログ確認、DS18B20 温度センサーの
+ *      キャリブレーション、およびスーパーキャパシタの初期充電を実施。
+ *   2. 100% Self-powered Demonstration:
+ *      USB ケーブルを抜去。Diode-OR 回路（ショットキーバリアダイオード構成）により
+ *      スーパーキャパシタ / TEG 発電電力へ無瞬断で切替。10秒周期の Deep Sleep サイクルで
+ *      完全自己駆動デモンストレーションを実行。
  * 
  * Deep Sleep アーキテクチャ:
  *   ESP32-C3 は大半の時間を Deep Sleep（~5μA）で過ごす。
- *   タイマーで周期的に起床し、以下を実行:
+ *   タイマーで周期的に起床（10秒間隔）し、以下を実行:
+ *     0. 低電圧ブラウンアウト保護: VSTORE < 3.0V の場合は直ちに 30秒間 Deep Sleep 復帰
  *     1. VSTORE 電圧を ADC で読取り（~1ms）
  *     2. 閾値判定 → 必要なら MOSFET ON → LED パルス発光
  *     3. 15 回に 1 回だけ DS18B20 温度を測定（~750ms 節約）
@@ -39,11 +50,12 @@
  *   GPIO0  — VSTORE 電圧モニタ (ADC, 10kΩ/10kΩ分圧)
  *   GPIO1  — VOUT 電圧モニタ   (ADC, 10kΩ/10kΩ分圧)
  *   GND    — 共通 GND
- *   USB    — ESP32-C3 電源（3.3V）= 悪魔のエネルギー源
+ *   USB/3.3V — Diode-OR ハイブリッド電源（USB 接続で初期起動 & Serial 出力、拔去で自律自己駆動）
  * 
  * ハードウェア対応:
  *   ペルチェ TEG  → 熱電発電（温度差→起電力）
  *   スーパーキャパシタ 1.0F → エネルギー蓄積バッファ
+ *   Diode-OR 回路 → USB 電源と蓄電バッファのハイブリッド給電ダイオードOR結合
  *   MOSFET (IRLZ44N) → ゲート開閉（悪魔の制御出力）
  *   LED (赤色) → 仕事の抽出を可視化
  * 
@@ -74,10 +86,14 @@
 // =====================================================================
 
 // --- Deep Sleep タイマー ---
-// 起床間隔: 2秒（μs 単位）
+// 起床間隔: 10秒（μs 単位）: 自己駆動サイクルバッファ用
 // Deep Sleep 中の消費電力: ~5μA @ 3.3V = 16.5μW
 // この間隔はキャパシタの充電時定数に対して十分短い
-const uint64_t WAKE_INTERVAL_US = 2000000ULL;  // 2秒
+const uint64_t WAKE_INTERVAL_US = 10000000ULL;  // 10秒
+
+// 低電圧ブラウンアウト保護閾値 (3.0V未満なら計測をスキップし即時ロングスリープ)
+const float LOW_VOLTAGE_GUARD_V = 3.0;
+const uint64_t LONG_SLEEP_INTERVAL_US = 30000000ULL; // 30秒スリープ
 
 // --- 電圧閾値 ---
 // LED 点灯閾値: キャパシタ電圧がこの値を超えたらパルス発光
@@ -97,7 +113,7 @@ const uint32_t PHASE_DURATION_S = 30;
 
 // --- 温度測定間隔 ---
 // DS18B20 は読取りに ~750ms かかるため、毎回読むとアクティブ時間が増大する。
-// 15 サイクル（= 30秒）に 1 回だけ読取りを行い、省電力化する。
+// 15 サイクルに 1 回だけ読取りを行い、省電力化する。
 // 中間サイクルでは RTC メモリに保持した直近の値を使用。
 const uint32_t TEMP_READ_INTERVAL = 15;
 
@@ -230,7 +246,7 @@ void printPhaseSummary() {
         Serial.println(F(" mJ"));
     } else {
         // Phase B の結果
-        Serial.println(F("【Phase B 結果: Feedback ON（悪魔あり — ESP32-C3 Deep Sleep）】"));
+        Serial.println(F("【Phase B 結果: Feedback ON（悪魔あり — ESP32-C3 Deep Sleep / Diode-OR Hybrid）】"));
         Serial.print(F("  LED_demon パルス回数: "));
         Serial.println(rtcData.flashCount_demon);
         Serial.print(F("  抽出エネルギー: "));
@@ -311,29 +327,44 @@ void setup() {
     // アクティブ時間計測開始
     unsigned long wakeStartTime = millis();
 
-    // Serial 初期化
-    Serial.begin(115200);
-
-    // Deep Sleep 復帰直後は Serial が安定するまで少し待つ
-    // (初回起動時はより長く待つ)
-    if (rtcData.experimentStartCycle == 0) {
-        delay(100);  // 初回起動時: USB Serial 安定待ち
-    } else {
-        delay(10);   // Deep Sleep 復帰: 短い待ち時間
-    }
-
     // ───────────────────────────────────────────────
-    //  GPIO 初期化
+    //  GPIO & ADC 初期化
     // ───────────────────────────────────────────────
     pinMode(MOSFET_GATE_PIN, OUTPUT);
     pinMode(LED_PASSIVE_PIN, OUTPUT);
     digitalWrite(MOSFET_GATE_PIN, LOW);
     digitalWrite(LED_PASSIVE_PIN, LOW);
 
-    // ADC 設定 (ESP32-C3)
-    // attenuation を 11dB に設定し、0〜3.3V の範囲を使用
+    // ADC 設定 (ESP32-C3: 11dB減衰, 12bit解像度)
     analogSetAttenuation(ADC_11db);
     analogReadResolution(12);
+
+    // ───────────────────────────────────────────────
+    //  低電圧ブラウンアウト保護 (Low Voltage Brownout Protection)
+    // ───────────────────────────────────────────────
+    /*
+     * V_store < 3.0V の場合、エネルギー不足によるマイコン動作不安定を防ぎ、
+     * キャパシタ充電を優先するため即座に 30 秒間の Deep Sleep に移行する。
+     */
+    float v_store_check = readVoltage(VSTORE_PIN);
+    if (v_store_check < 3.0) {
+        digitalWrite(MOSFET_GATE_PIN, LOW);
+        gpio_hold_en((gpio_num_t)MOSFET_GATE_PIN);
+        esp_sleep_enable_timer_wakeup(30000000ULL);  // 30秒 Deep Sleep
+        esp_deep_sleep_start();
+    }
+
+    // ───────────────────────────────────────────────
+    //  Serial 初期化
+    // ───────────────────────────────────────────────
+    Serial.begin(115200);
+
+    // Deep Sleep 復帰直後は Serial が安定するまで少し待つ
+    if (rtcData.experimentStartCycle == 0) {
+        delay(100);  // 初回起動時: USB Serial 安定待ち
+    } else {
+        delay(10);   // Deep Sleep 復帰: 短い待ち時間
+    }
 
     // ───────────────────────────────────────────────
     //  初回起動判定
@@ -357,17 +388,23 @@ void setup() {
         Serial.println();
         Serial.println(F("════════════════════════════════════════════════════"));
         Serial.println(F(" Maxwell's Demon Energy Harvester v2.0"));
-        Serial.println(F(" Configuration D: ESP32-C3 Deep Sleep Edition"));
-        Serial.println(F(" 情報エンジン検証デバイス — 超低消費電力版"));
+        Serial.println(F(" Configuration D: ESP32-C3 Deep Sleep (Diode-OR Hybrid) Edition"));
+        Serial.println(F(" 情報エンジン検証デバイス — 超低消費電力 / ハイブリッド自己駆動版"));
         Serial.println(F("════════════════════════════════════════════════════"));
         Serial.println();
         Serial.println(F("論文: Breaking the Second Law Limits"));
         Serial.println(F("検証: 体温温度差からの情報フィードバック発電"));
+        Serial.println(F("モード: Diode-OR ハイブリッド動作（USB初期起動 → 100% 自律自己駆動）"));
         Serial.println(F("目標: Deep Sleep による悪魔コスト削減で正味仕事>0を達成"));
+        Serial.println();
+        Serial.println(F("【Hybrid Startup Mode の手順】"));
+        Serial.println(F(" 1. USB 接続時: 初回起動・Serial キャリブレーション・初期充電"));
+        Serial.println(F(" 2. USB 切断時: Diode-OR 給電で 100% 自律自己駆動デモへシームレス移行"));
         Serial.println();
         Serial.print(F("Deep Sleep 間隔: "));
         Serial.print((uint32_t)(WAKE_INTERVAL_US / 1000000ULL));
-        Serial.println(F(" 秒"));
+        Serial.println(F(" 秒 (自己駆動サイクルバッファ)"));
+        Serial.println(F("低電圧保護:       V_store < 3.0V で 30秒 Deep Sleep 休眠"));
         Serial.print(F("フェーズ切替:     "));
         Serial.print(PHASE_DURATION_S);
         Serial.println(F(" 秒"));
@@ -477,10 +514,20 @@ void setup() {
     float deltaT  = T_hot - T_cold;
 
     // ───────────────────────────────────────────────
-    //  電圧測定
+    //  電圧測定 & ブラウンアウト保護
     // ───────────────────────────────────────────────
     float V_store = readVoltage(VSTORE_PIN);  // スーパーキャパシタ電圧
     float V_out   = readVoltage(VOUT_PIN);    // VOUT 電圧
+
+    // 自律給電時の低電圧保護: VSTOREが3.0V未満の場合、即座に30秒ロングスリープに移行して充電を待つ
+    if (V_store < LOW_VOLTAGE_GUARD_V && rtcData.experimentStartCycle > 1) {
+        Serial.print(F("⚠ 電圧低下検出 (V_store = "));
+        Serial.print(V_store);
+        Serial.println(F("V < 3.0V) → 30秒充電スリープに移行"));
+        Serial.flush();
+        esp_sleep_enable_timer_wakeup(LONG_SLEEP_INTERVAL_US);
+        esp_deep_sleep_start();
+    }
 
     // ───────────────────────────────────────────────
     //  制御ロジック
