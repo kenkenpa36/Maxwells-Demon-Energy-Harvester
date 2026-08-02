@@ -1,0 +1,718 @@
+/*
+ * Maxwell's Demon Energy Harvester — ESP32-C3 Deep Sleep 制御コード
+ * Configuration D: 超低消費電力フィードバックエンジン
+ * 
+ * プロジェクト: Macroscopic Quantum Entanglement Engine 検証デバイス
+ * 論文: "Breaking the Second Law Limits: From Autonomous Maxwell's Demons 
+ *        to Quantum Landauer Energy Harvesters"
+ * 
+ * 概要:
+ *   体温と外気温の温度差（ΔT≈5〜15℃）からペルチェ素子で発電し、
+ *   ESP32-C3（マクスウェルの悪魔）がフィードバック制御することで
+ *   エネルギー抽出効率がどう変わるかを検証する。
+ *
+ * Configuration D の目的:
+ *   Arduinoベースの Configuration A/B/C では悪魔の消費電力（~150mW）が
+ *   抽出仕事を常に上回り、正味仕事 < 0 となっていた（ランダウアー限界の実証）。
+ *   本構成では ESP32-C3 の Deep Sleep（~5μA, ~16.5μW）を活用し、
+ *   悪魔のコストを 2〜3桁削減することで、正味仕事 > 0 の達成を目指す。
+ *   これは論文の量子もつれによるコスト反転の古典的アナロジーであり、
+ *   「測定コストの最小化」が第二法則の見かけの違反にどう寄与するかを示す。
+ * 
+ * Deep Sleep アーキテクチャ:
+ *   ESP32-C3 は大半の時間を Deep Sleep（~5μA）で過ごす。
+ *   タイマーで周期的に起床し、以下を実行:
+ *     1. VSTORE 電圧を ADC で読取り（~1ms）
+ *     2. 閾値判定 → 必要なら MOSFET ON → LED パルス発光
+ *     3. 15 回に 1 回だけ DS18B20 温度を測定（~750ms 節約）
+ *     4. CSV データを Serial 出力
+ *     5. Deep Sleep に復帰
+ * 
+ * 実験モード:
+ *   Phase A (30秒): Feedback OFF — LED_passive が常時 ON、MOSFET 常に OFF
+ *   Phase B (30秒): Feedback ON  — Deep Sleep wake-measure-flash サイクル
+ * 
+ * 接続 (XIAO ESP32-C3):
+ *   GPIO2  — DS18B20 温度センサー (OneWire, 4.7kΩプルアップ)
+ *   GPIO3  — MOSFET Gate → LED_demon 制御
+ *   GPIO4  — LED_passive 制御 (Phase A でのみ有効)
+ *   GPIO0  — VSTORE 電圧モニタ (ADC, 10kΩ/10kΩ分圧)
+ *   GPIO1  — VOUT 電圧モニタ   (ADC, 10kΩ/10kΩ分圧)
+ *   GND    — 共通 GND
+ *   USB    — ESP32-C3 電源（3.3V）= 悪魔のエネルギー源
+ * 
+ * ハードウェア対応:
+ *   ペルチェ TEG  → 熱電発電（温度差→起電力）
+ *   スーパーキャパシタ 1.0F → エネルギー蓄積バッファ
+ *   MOSFET (IRLZ44N) → ゲート開閉（悪魔の制御出力）
+ *   LED (赤色) → 仕事の抽出を可視化
+ * 
+ * 論文との対応:
+ *   V_store 監視     ←→  量子状態の測定 (dy_t)
+ *   閾値判定          ←→  ベイズ推定 (事後確率 P の計算)
+ *   MOSFET ON/OFF     ←→  トンネル障壁の開閉 (kappa_ON/OFF)
+ *   LED パルス発光    ←→  仕事の抽出 (W_ext)
+ *   Deep Sleep        ←→  量子もつれによる測定コスト削減
+ *   正味仕事 > 0      ←→  ランダウアー限界の超越
+ */
+
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <esp_sleep.h>
+
+// =====================================================================
+//  ピン定義 (XIAO ESP32-C3)
+// =====================================================================
+#define ONE_WIRE_BUS      2    // DS18B20 データピン (GPIO2)
+#define MOSFET_GATE_PIN   3    // MOSFET Gate — LED_demon 制御 (GPIO3)
+#define LED_PASSIVE_PIN   4    // LED_passive — Phase A 比較用 (GPIO4)
+#define VSTORE_PIN        0    // スーパーキャパシタ電圧 ADC (GPIO0/A0)
+#define VOUT_PIN          1    // VOUT 電圧 ADC (GPIO1/A1)
+
+// =====================================================================
+//  定数
+// =====================================================================
+
+// --- Deep Sleep タイマー ---
+// 起床間隔: 2秒（μs 単位）
+// Deep Sleep 中の消費電力: ~5μA @ 3.3V = 16.5μW
+// この間隔はキャパシタの充電時定数に対して十分短い
+const uint64_t WAKE_INTERVAL_US = 2000000ULL;  // 2秒
+
+// --- 電圧閾値 ---
+// LED 点灯閾値: キャパシタ電圧がこの値を超えたらパルス発光
+// 論文対応: P[0] > threshold → ゲートを開く判定
+const float FLASH_THRESHOLD_V = 2.5;   // LED Vf + 余裕
+// LED 消灯閾値: この電圧まで放電したらパルス停止
+const float FLASH_CUTOFF_V   = 1.8;
+
+// --- パルス制御 ---
+// パルス持続時間 (ms): LED 点灯時間
+// 短いほど悪魔のアクティブ時間が減り、コストが下がる
+const int FLASH_DURATION_MS = 100;
+
+// --- 実験フェーズ ---
+// 各フェーズの持続時間 (秒)
+const uint32_t PHASE_DURATION_S = 30;
+
+// --- 温度測定間隔 ---
+// DS18B20 は読取りに ~750ms かかるため、毎回読むとアクティブ時間が増大する。
+// 15 サイクル（= 30秒）に 1 回だけ読取りを行い、省電力化する。
+// 中間サイクルでは RTC メモリに保持した直近の値を使用。
+const uint32_t TEMP_READ_INTERVAL = 15;
+
+// --- ADC 設定 (ESP32-C3) ---
+// ESP32-C3 の ADC は 12bit (0-4095), 基準電圧 ~3.3V (実測で補正推奨)
+// 分圧比: 10kΩ / 10kΩ → 実電圧 = 読取値 × 2
+const float VOLTAGE_DIVIDER_RATIO = 2.0;
+const float ADC_REF_VOLTAGE       = 3.3;    // ESP32-C3 の ADC 基準電圧
+const int   ADC_RESOLUTION        = 4095;   // 12-bit ADC
+
+// --- 消費電力パラメータ ---
+// ESP32-C3 アクティブ時消費電力: ~30mA @ 3.3V = 99mW
+// (WiFi/BLE OFF, CPU 160MHz, ADC 読取り程度の軽負荷時)
+const float ESP32_ACTIVE_POWER_MW = 99.0;
+
+// ESP32-C3 Deep Sleep 時消費電力: ~5μA @ 3.3V = 16.5μW = 0.0165mW
+const float ESP32_SLEEP_POWER_MW  = 0.0165;
+
+// Arduino (Configuration A) の消費電力 — 比較用
+const float ARDUINO_POWER_MW      = 150.0;
+
+// --- スーパーキャパシタ ---
+// エネルギー計算: E = 0.5 * C * (V1² - V2²)
+const float SUPERCAP_F = 1.0;  // 1.0 ファラド
+
+// =====================================================================
+//  RTC メモリ構造体 (Deep Sleep 中も保持)
+// =====================================================================
+/*
+ * Deep Sleep からの復帰後もデータが失われないよう、
+ * RTC_DATA_ATTR 属性で RTC slow memory に配置する。
+ * 
+ * experimentStartCycle == 0 を初回起動の判定に使用:
+ *   - リセット直後: RTC メモリはゼロクリアされる
+ *   - Deep Sleep 復帰: 前回の値が保持される
+ */
+RTC_DATA_ATTR struct {
+    bool     feedbackMode;          // 現在のフェーズ (false=A, true=B)
+    uint32_t cycleCount;            // 累積ウェイクサイクル数
+    uint32_t phaseStartCycle;       // 現在フェーズ開始時のサイクル番号
+    uint32_t flashCount_passive;    // Phase A: LED 点灯カウント
+    uint32_t flashCount_demon;      // Phase B: LED パルス発光カウント
+    float    totalEnergy_passive_mJ;// Phase A: 抽出エネルギー累積 (mJ)
+    float    totalEnergy_demon_mJ;  // Phase B: 抽出エネルギー累積 (mJ)
+    float    totalActiveTime_ms;    // ESP32 アクティブ時間累積 (ms)
+    float    lastT_hot;             // 直近の高温側温度 (℃)
+    float    lastT_cold;            // 直近の低温側温度 (℃)
+    uint32_t experimentStartCycle;  // 実験開始マーカー (0 = 初回起動)
+} rtcData;
+
+// =====================================================================
+//  温度センサー
+// =====================================================================
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+// =====================================================================
+//  電圧読取り関数
+// =====================================================================
+/*
+ * ESP32-C3 の ADC (12-bit, 0〜3.3V) で分圧された電圧を読み取り、
+ * 分圧比を補正して実際のキャパシタ電圧を返す。
+ * 
+ * 注意: ESP32 の ADC は非線形特性があるため、精密測定には
+ *       adc_calibration API の使用を推奨。ここでは簡易計算を使用。
+ */
+float readVoltage(int pin) {
+    // 複数回サンプリングして平均化（ノイズ低減）
+    const int SAMPLES = 4;
+    uint32_t sum = 0;
+    for (int i = 0; i < SAMPLES; i++) {
+        sum += analogRead(pin);
+    }
+    float raw = (float)sum / SAMPLES;
+    float voltage = (raw / (float)ADC_RESOLUTION) * ADC_REF_VOLTAGE;
+    return voltage * VOLTAGE_DIVIDER_RATIO;  // 分圧補正
+}
+
+// =====================================================================
+//  フェーズ終了サマリー出力
+// =====================================================================
+/*
+ * フェーズ切替時に結果を Serial に出力する。
+ * 
+ * 出力内容:
+ *   - LED 点灯回数/パルス回数
+ *   - 抽出エネルギー (mJ)
+ *   - 悪魔のコスト (mJ): ESP32 のアクティブ時間 × 消費電力
+ *   - 正味仕事 = 抽出仕事 − 悪魔コスト
+ *   - Arduino 比較: 同じ時間での Arduino のコスト
+ */
+void printPhaseSummary() {
+    // 経過時間の計算
+    uint32_t phaseCycles = rtcData.cycleCount - rtcData.phaseStartCycle;
+    float phaseTime_s = phaseCycles * (WAKE_INTERVAL_US / 1000000.0);
+
+    // 悪魔のコスト計算
+    // アクティブ時間中の電力消費 + スリープ時間中の電力消費
+    float activeTime_s = rtcData.totalActiveTime_ms / 1000.0;
+    float sleepTime_s  = phaseTime_s - activeTime_s;
+    if (sleepTime_s < 0) sleepTime_s = 0;
+
+    float demonCost_active_mJ = ESP32_ACTIVE_POWER_MW * activeTime_s;   // mW * s = mJ
+    float demonCost_sleep_mJ  = ESP32_SLEEP_POWER_MW  * sleepTime_s;    // mW * s = mJ
+    float demonCost_total_mJ  = demonCost_active_mJ + demonCost_sleep_mJ;
+
+    // Arduino で同じ時間動かした場合のコスト (比較用)
+    float arduinoCost_mJ = ARDUINO_POWER_MW * phaseTime_s;
+
+    // 平均消費電力
+    float avgPower_mW = 0;
+    if (phaseTime_s > 0) {
+        avgPower_mW = demonCost_total_mJ / phaseTime_s;  // mJ / s = mW
+    }
+
+    Serial.println();
+    Serial.println(F("════════════════════════════════════════════════════"));
+
+    if (!rtcData.feedbackMode) {
+        // Phase A の結果
+        Serial.println(F("【Phase A 結果: Feedback OFF（悪魔なし）】"));
+        Serial.print(F("  LED_passive 点灯カウント: "));
+        Serial.println(rtcData.flashCount_passive);
+        Serial.print(F("  抽出エネルギー: "));
+        Serial.print(rtcData.totalEnergy_passive_mJ, 4);
+        Serial.println(F(" mJ"));
+        Serial.println(F("  悪魔のコスト: N/A (Phase A は受動的)"));
+        Serial.print(F("  正味仕事: "));
+        Serial.print(rtcData.totalEnergy_passive_mJ, 4);
+        Serial.println(F(" mJ"));
+    } else {
+        // Phase B の結果
+        Serial.println(F("【Phase B 結果: Feedback ON（悪魔あり — ESP32-C3 Deep Sleep）】"));
+        Serial.print(F("  LED_demon パルス回数: "));
+        Serial.println(rtcData.flashCount_demon);
+        Serial.print(F("  抽出エネルギー: "));
+        Serial.print(rtcData.totalEnergy_demon_mJ, 4);
+        Serial.println(F(" mJ"));
+        Serial.println();
+
+        Serial.println(F("  ─── 悪魔のコスト分析 ───"));
+        Serial.print(F("  ESP32 アクティブ時間合計: "));
+        Serial.print(rtcData.totalActiveTime_ms, 1);
+        Serial.println(F(" ms"));
+        Serial.print(F("  アクティブ時コスト: "));
+        Serial.print(demonCost_active_mJ, 4);
+        Serial.println(F(" mJ"));
+        Serial.print(F("  スリープ時コスト:   "));
+        Serial.print(demonCost_sleep_mJ, 4);
+        Serial.println(F(" mJ"));
+        Serial.print(F("  悪魔コスト合計:     "));
+        Serial.print(demonCost_total_mJ, 4);
+        Serial.println(F(" mJ"));
+        Serial.print(F("  平均消費電力:       "));
+        Serial.print(avgPower_mW, 4);
+        Serial.println(F(" mW"));
+        Serial.println();
+
+        Serial.println(F("  ─── Arduino 比較 ───"));
+        Serial.print(F("  Arduino コスト (同時間): "));
+        Serial.print(arduinoCost_mJ, 1);
+        Serial.println(F(" mJ"));
+        Serial.print(F("  コスト削減率: "));
+        if (arduinoCost_mJ > 0) {
+            float reduction = (1.0 - demonCost_total_mJ / arduinoCost_mJ) * 100.0;
+            Serial.print(reduction, 1);
+            Serial.println(F(" %"));
+        } else {
+            Serial.println(F("N/A"));
+        }
+        Serial.println();
+
+        float netWork = rtcData.totalEnergy_demon_mJ - demonCost_total_mJ;
+        Serial.print(F("  ★ 正味仕事 = 抽出仕事 - 悪魔コスト = "));
+        Serial.print(netWork, 4);
+        Serial.println(F(" mJ"));
+
+        if (netWork > 0) {
+            Serial.println();
+            Serial.println(F("  ──────────────────────────────────────"));
+            Serial.println(F("  ★★★ 正味仕事 > 0 達成! ★★★"));
+            Serial.println(F("  Deep Sleep による測定コスト削減により、"));
+            Serial.println(F("  悪魔の情報処理コストが抽出仕事を下回った。"));
+            Serial.println(F("  これは論文の「量子もつれによるランダウアー限界超越」の"));
+            Serial.println(F("  古典的アナロジーとして解釈できる。"));
+            Serial.println(F("  ──────────────────────────────────────"));
+        } else {
+            Serial.println();
+            Serial.println(F("  → 正味仕事 < 0: ランダウアー限界の実証"));
+            Serial.println(F("    悪魔のコストが抽出仕事を上回っている。"));
+            Serial.println(F("    ΔT を大きくするか、Deep Sleep を長くして再試行。"));
+        }
+    }
+
+    Serial.println(F("════════════════════════════════════════════════════"));
+    Serial.println();
+}
+
+// =====================================================================
+//  セットアップ (毎回の起床時に呼ばれる)
+// =====================================================================
+/*
+ * ESP32-C3 の Deep Sleep からの復帰は「リセット」として扱われるため、
+ * setup() は毎回実行される。RTC メモリの値で初回起動 vs 復帰を判別。
+ *
+ * フロー:
+ *   初回起動時 → ヘッダー出力、RTC メモリ初期化
+ *   復帰時     → 即座に測定・制御ロジックを実行
+ */
+void setup() {
+    // アクティブ時間計測開始
+    unsigned long wakeStartTime = millis();
+
+    // Serial 初期化
+    Serial.begin(115200);
+
+    // Deep Sleep 復帰直後は Serial が安定するまで少し待つ
+    // (初回起動時はより長く待つ)
+    if (rtcData.experimentStartCycle == 0) {
+        delay(100);  // 初回起動時: USB Serial 安定待ち
+    } else {
+        delay(10);   // Deep Sleep 復帰: 短い待ち時間
+    }
+
+    // ───────────────────────────────────────────────
+    //  GPIO 初期化
+    // ───────────────────────────────────────────────
+    pinMode(MOSFET_GATE_PIN, OUTPUT);
+    pinMode(LED_PASSIVE_PIN, OUTPUT);
+    digitalWrite(MOSFET_GATE_PIN, LOW);
+    digitalWrite(LED_PASSIVE_PIN, LOW);
+
+    // ADC 設定 (ESP32-C3)
+    // attenuation を 11dB に設定し、0〜3.3V の範囲を使用
+    analogSetAttenuation(ADC_11db);
+    analogReadResolution(12);
+
+    // ───────────────────────────────────────────────
+    //  初回起動判定
+    // ───────────────────────────────────────────────
+    if (rtcData.experimentStartCycle == 0) {
+        // ===== 初回起動 (リセット後の最初の実行) =====
+        // RTC メモリを初期化
+        rtcData.feedbackMode          = false;  // Phase A から開始
+        rtcData.cycleCount            = 1;      // 最初のサイクル
+        rtcData.phaseStartCycle       = 1;
+        rtcData.flashCount_passive    = 0;
+        rtcData.flashCount_demon      = 0;
+        rtcData.totalEnergy_passive_mJ = 0.0;
+        rtcData.totalEnergy_demon_mJ  = 0.0;
+        rtcData.totalActiveTime_ms    = 0.0;
+        rtcData.lastT_hot             = 0.0;
+        rtcData.lastT_cold            = 0.0;
+        rtcData.experimentStartCycle  = 1;  // 初回起動マーカーをセット
+
+        // ヘッダー出力
+        Serial.println();
+        Serial.println(F("════════════════════════════════════════════════════"));
+        Serial.println(F(" Maxwell's Demon Energy Harvester v2.0"));
+        Serial.println(F(" Configuration D: ESP32-C3 Deep Sleep Edition"));
+        Serial.println(F(" 情報エンジン検証デバイス — 超低消費電力版"));
+        Serial.println(F("════════════════════════════════════════════════════"));
+        Serial.println();
+        Serial.println(F("論文: Breaking the Second Law Limits"));
+        Serial.println(F("検証: 体温温度差からの情報フィードバック発電"));
+        Serial.println(F("目標: Deep Sleep による悪魔コスト削減で正味仕事>0を達成"));
+        Serial.println();
+        Serial.print(F("Deep Sleep 間隔: "));
+        Serial.print((uint32_t)(WAKE_INTERVAL_US / 1000000ULL));
+        Serial.println(F(" 秒"));
+        Serial.print(F("フェーズ切替:     "));
+        Serial.print(PHASE_DURATION_S);
+        Serial.println(F(" 秒"));
+        Serial.print(F("温度測定間隔:     "));
+        Serial.print(TEMP_READ_INTERVAL);
+        Serial.println(F(" サイクル"));
+        Serial.print(F("ESP32 アクティブ: ~"));
+        Serial.print(ESP32_ACTIVE_POWER_MW, 0);
+        Serial.println(F(" mW"));
+        Serial.print(F("ESP32 スリープ:   ~"));
+        Serial.print(ESP32_SLEEP_POWER_MW * 1000, 1);
+        Serial.println(F(" μW"));
+        Serial.print(F("Arduino 比較:     ~"));
+        Serial.print(ARDUINO_POWER_MW, 0);
+        Serial.println(F(" mW"));
+        Serial.println();
+        Serial.println(F("Phase A (30s): Feedback OFF — 悪魔なし（受動的）"));
+        Serial.println(F("Phase B (30s): Feedback ON  — 悪魔あり（Deep Sleep最適化）"));
+        Serial.println(F("════════════════════════════════════════════════════"));
+        Serial.println();
+
+        // CSV ヘッダー
+        Serial.println(F("time_s,phase,T_hot_C,T_cold_C,deltaT_C,V_store_mV,V_out_mV,flash_count,E_extracted_mJ,demon_cost_mJ,net_work_mJ,avg_power_mW"));
+
+        // 初回は温度を測定
+        sensors.begin();
+        sensors.requestTemperatures();
+        rtcData.lastT_hot  = sensors.getTempCByIndex(0);
+        rtcData.lastT_cold = sensors.getTempCByIndex(1);
+
+        // 不正な温度値のガード (-127 は未接続時の値)
+        if (rtcData.lastT_hot < -100) rtcData.lastT_hot = 0.0;
+        if (rtcData.lastT_cold < -100) rtcData.lastT_cold = 0.0;
+
+    } else {
+        // ===== Deep Sleep からの復帰 =====
+        rtcData.cycleCount++;
+    }
+
+    // ───────────────────────────────────────────────
+    //  フェーズ切替判定
+    // ───────────────────────────────────────────────
+    /*
+     * 経過時間は「サイクル数 × スリープ間隔」で推定する。
+     * 各サイクルのアクティブ時間 (~10ms) はスリープ時間 (2000ms) に比べ
+     * 無視できるほど短いため、この近似は十分な精度を持つ。
+     */
+    uint32_t cyclesInPhase = rtcData.cycleCount - rtcData.phaseStartCycle;
+    float phaseElapsed_s = cyclesInPhase * (WAKE_INTERVAL_US / 1000000.0);
+
+    if (phaseElapsed_s >= (float)PHASE_DURATION_S) {
+        // フェーズ終了 → サマリー出力 & 切替
+        printPhaseSummary();
+
+        // フェーズ切替
+        rtcData.feedbackMode = !rtcData.feedbackMode;
+        rtcData.phaseStartCycle = rtcData.cycleCount;
+
+        // フェーズ別カウンターのリセット
+        if (rtcData.feedbackMode) {
+            // Phase B 開始: Demon カウンターをリセット
+            rtcData.flashCount_demon      = 0;
+            rtcData.totalEnergy_demon_mJ  = 0.0;
+        } else {
+            // Phase A 開始: Passive カウンターをリセット
+            rtcData.flashCount_passive    = 0;
+            rtcData.totalEnergy_passive_mJ = 0.0;
+        }
+        rtcData.totalActiveTime_ms = 0.0;
+
+        // LED/MOSFET リセット
+        digitalWrite(MOSFET_GATE_PIN, LOW);
+        digitalWrite(LED_PASSIVE_PIN, LOW);
+
+        if (rtcData.feedbackMode) {
+            Serial.println(F(">>> Phase B 開始: Feedback ON（悪魔が Deep Sleep フィードバック制御）"));
+        } else {
+            Serial.println(F(">>> Phase A 開始: Feedback OFF（受動的接続のみ）"));
+        }
+        Serial.println();
+    }
+
+    // ───────────────────────────────────────────────
+    //  温度測定 (TEMP_READ_INTERVAL サイクルに 1 回)
+    // ───────────────────────────────────────────────
+    /*
+     * DS18B20 の変換時間は ~750ms（12bit 精度）。
+     * 毎サイクルの読取りはアクティブ時間を 100 倍以上増大させ、
+     * 悪魔のコストを大幅に押し上げるため、間引きが必須。
+     * 
+     * 温度は数秒〜数十秒のオーダーで変化するため、
+     * 30 秒に 1 回の測定で実験精度は十分に確保される。
+     */
+    if (rtcData.cycleCount % TEMP_READ_INTERVAL == 0) {
+        sensors.begin();
+        sensors.requestTemperatures();
+        float T_hot_new  = sensors.getTempCByIndex(0);
+        float T_cold_new = sensors.getTempCByIndex(1);
+
+        // 有効な温度値のみ更新 (-127℃ はセンサー未接続/エラー)
+        if (T_hot_new > -100)  rtcData.lastT_hot  = T_hot_new;
+        if (T_cold_new > -100) rtcData.lastT_cold = T_cold_new;
+    }
+
+    float T_hot   = rtcData.lastT_hot;
+    float T_cold  = rtcData.lastT_cold;
+    float deltaT  = T_hot - T_cold;
+
+    // ───────────────────────────────────────────────
+    //  電圧測定
+    // ───────────────────────────────────────────────
+    float V_store = readVoltage(VSTORE_PIN);  // スーパーキャパシタ電圧
+    float V_out   = readVoltage(VOUT_PIN);    // VOUT 電圧
+
+    // ───────────────────────────────────────────────
+    //  制御ロジック
+    // ───────────────────────────────────────────────
+    bool flashed = false;
+    float E_flash_mJ = 0.0;
+
+    if (!rtcData.feedbackMode) {
+        // ======================================================
+        //  Phase A: Feedback OFF (受動的接続)
+        // ======================================================
+        /*
+         * LED_passive を常時 ON にし、ペルチェ出力を直接 LED に供給する。
+         * MOSFET は常に OFF。
+         * 
+         * この構成では、温度差による起電力が LED の Vf を超えた場合のみ
+         * LED が微弱に点灯する。これは「悪魔なし」の基準ケース。
+         * 
+         * 論文対応: 
+         *   量子ドットの自律熱エンジン（測定なし）に対応。
+         *   トンネル障壁が固定された状態。
+         */
+        digitalWrite(LED_PASSIVE_PIN, HIGH);
+        digitalWrite(MOSFET_GATE_PIN, LOW);
+
+        // V_out が LED Vf を超えていれば光っている
+        if (V_out > FLASH_CUTOFF_V) {
+            // LED 電流推定: (V_out - V_LED) / R_series
+            float I_led_A = (V_out - FLASH_CUTOFF_V) / 330.0;  // 330Ω シリーズ抵抗
+            float P_led_mW = V_out * I_led_A * 1000.0;
+            // エネルギー = 電力 × 時間 (このサイクルのアクティブ時間は短いが、
+            // LED は Deep Sleep 中も回路的に接続されているため、
+            // スリープ間隔全体で光り続けていると仮定)
+            float interval_s = WAKE_INTERVAL_US / 1000000.0;
+            rtcData.totalEnergy_passive_mJ += P_led_mW * interval_s;
+            rtcData.flashCount_passive++;
+        }
+
+    } else {
+        // ======================================================
+        //  Phase B: Feedback ON (マクスウェルの悪魔 — Deep Sleep 最適化)
+        // ======================================================
+        /*
+         * ESP32-C3 が「悪魔」として機能する。
+         * 
+         * 動作原理:
+         *   1. Deep Sleep から起床（タイマートリガー）
+         *   2. VSTORE 電圧を測定（= 量子状態の測定 dy_t）
+         *   3. 閾値判定（= ベイズ推定による事後確率 P の計算）
+         *   4. 閾値超過 → MOSFET ON → LED パルス（= ゲート開 + 仕事抽出）
+         *   5. Deep Sleep に復帰（= 量子もつれ状態での休眠）
+         * 
+         * Configuration D の革新点:
+         *   Arduino (Config A) では常時 150mW を消費していたが、
+         *   ESP32-C3 は以下の時間配分でコストを劇的に削減:
+         *     アクティブ: ~10ms × 99mW ≈ 0.99 mJ/cycle (フラッシュなし)
+         *     スリープ:   ~2000ms × 0.0165mW ≈ 0.033 mJ/cycle
+         *     合計:       ~1.02 mJ/cycle (2秒あたり)
+         *     平均電力:   ~0.51 mW  (Arduino の 1/300!)
+         * 
+         * シミュレーション対応:
+         *   simulate_macroscopic_quantum_engine.py L50-L65
+         *   if P[0] > 0.5:     → if (V_store < THRESHOLD):
+         *       kappaL = ON    →     MOSFET = OFF (蓄電中 = 障壁閉)
+         *   else:              → else:
+         *       kappaR = ON    →     MOSFET = ON  (放電 = 障壁開 = 仕事抽出)
+         */
+        digitalWrite(LED_PASSIVE_PIN, LOW);  // 比較用 LED は OFF
+
+        if (V_store >= FLASH_THRESHOLD_V) {
+            // ─── 十分なエネルギーが蓄積 → ゲートを開いて LED 点灯! ───
+            /*
+             * エネルギー計算:
+             *   E = 0.5 * C * (V_before² - V_after²)
+             *   C = SUPERCAP_F (1.0F)
+             * 
+             * この放電エネルギーが「悪魔が系から抽出した仕事」に対応。
+             * 論文式: W_ext = kT ln(P_0/P_1) - Δf (式 (15))
+             */
+            digitalWrite(MOSFET_GATE_PIN, HIGH);
+            delay(FLASH_DURATION_MS);
+            digitalWrite(MOSFET_GATE_PIN, LOW);
+
+            // パルス後の電圧を測定
+            float V_after = readVoltage(VSTORE_PIN);
+
+            // 抽出エネルギー = 0.5 * C * (V1² - V2²) [J → mJ: ×1000]
+            E_flash_mJ = 0.5 * SUPERCAP_F
+                       * (V_store * V_store - V_after * V_after)
+                       * 1000.0;
+            if (E_flash_mJ < 0) E_flash_mJ = 0;  // ガード
+
+            rtcData.totalEnergy_demon_mJ += E_flash_mJ;
+            rtcData.flashCount_demon++;
+            flashed = true;
+        }
+    }
+
+    // ───────────────────────────────────────────────
+    //  アクティブ時間の記録
+    // ───────────────────────────────────────────────
+    unsigned long activeTime_ms = millis() - wakeStartTime;
+    rtcData.totalActiveTime_ms += (float)activeTime_ms;
+
+    // ───────────────────────────────────────────────
+    //  パワーバジェット計算
+    // ───────────────────────────────────────────────
+    /*
+     * 悪魔のコスト（この時点までの累積）を計算する。
+     *
+     * 平均消費電力の計算:
+     *   P_avg = (t_active × P_active + t_sleep × P_sleep) / t_total
+     * 
+     * この値が Arduino の 150mW に対してどれだけ削減できているかが
+     * Configuration D の成否を決める重要な指標。
+     */
+    float totalElapsed_s = rtcData.cycleCount * (WAKE_INTERVAL_US / 1000000.0);
+    float totalActive_s  = rtcData.totalActiveTime_ms / 1000.0;
+    float totalSleep_s   = totalElapsed_s - totalActive_s;
+    if (totalSleep_s < 0) totalSleep_s = 0;
+
+    float demonCost_mJ = ESP32_ACTIVE_POWER_MW * totalActive_s
+                       + ESP32_SLEEP_POWER_MW  * totalSleep_s;
+
+    float avgPower_mW = 0;
+    if (totalElapsed_s > 0) {
+        avgPower_mW = demonCost_mJ / totalElapsed_s;
+    }
+
+    // 正味仕事 (Phase B のみ意味がある)
+    float netWork_mJ;
+    float E_extracted_mJ;
+    uint32_t flashCount;
+    if (rtcData.feedbackMode) {
+        E_extracted_mJ = rtcData.totalEnergy_demon_mJ;
+        flashCount     = rtcData.flashCount_demon;
+        netWork_mJ     = E_extracted_mJ - demonCost_mJ;
+    } else {
+        E_extracted_mJ = rtcData.totalEnergy_passive_mJ;
+        flashCount     = rtcData.flashCount_passive;
+        netWork_mJ     = E_extracted_mJ;  // Phase A: 悪魔コストなし
+    }
+
+    // ───────────────────────────────────────────────
+    //  CSV データ出力
+    // ───────────────────────────────────────────────
+    /*
+     * 出力フォーマット:
+     *   time_s, phase, T_hot, T_cold, deltaT, V_store_mV, V_out_mV,
+     *   flash_count, E_extracted_mJ, demon_cost_mJ, net_work_mJ, avg_power_mW
+     * 
+     * シリアルモニターまたは PC 側の Python スクリプトで CSV として記録。
+     * フィードバック制御の有無による差分を可視化・分析するためのデータ。
+     */
+    float time_s = rtcData.cycleCount * (WAKE_INTERVAL_US / 1000000.0);
+
+    Serial.print(time_s, 1);
+    Serial.print(",");
+    Serial.print(rtcData.feedbackMode ? "B_ON" : "A_OFF");
+    Serial.print(",");
+    Serial.print(T_hot, 1);
+    Serial.print(",");
+    Serial.print(T_cold, 1);
+    Serial.print(",");
+    Serial.print(deltaT, 1);
+    Serial.print(",");
+    Serial.print(V_store * 1000, 0);    // mV
+    Serial.print(",");
+    Serial.print(V_out * 1000, 0);      // mV
+    Serial.print(",");
+    Serial.print(flashCount);
+    Serial.print(",");
+    Serial.print(E_extracted_mJ, 4);
+    Serial.print(",");
+    Serial.print(demonCost_mJ, 4);
+    Serial.print(",");
+    Serial.print(netWork_mJ, 4);
+    Serial.print(",");
+    Serial.println(avgPower_mW, 4);
+
+    // ───────────────────────────────────────────────
+    //  Deep Sleep 移行
+    // ───────────────────────────────────────────────
+    /*
+     * ESP32-C3 を Deep Sleep に移行させる。
+     * 
+     * Deep Sleep 中:
+     *   - CPU 停止、RAM 消失 (RTC メモリのみ保持)
+     *   - 消費電流: ~5μA
+     *   - タイマーによる自動復帰 (WAKE_INTERVAL_US 後)
+     * 
+     * 復帰時は setup() が最初から実行される (リセットと同等)。
+     * loop() は使用しない（Deep Sleep アーキテクチャのため）。
+     * 
+     * Phase A 中も Deep Sleep を使用する:
+     *   LED_passive は GPIO4 が HIGH でも、Deep Sleep に入ると GPIO は
+     *   Hi-Z になる。これを防ぐため gpio_hold_en() で状態を保持する。
+     */
+
+    // Phase A の場合: LED_passive の GPIO 状態を Deep Sleep 中も保持
+    if (!rtcData.feedbackMode) {
+        gpio_hold_en((gpio_num_t)LED_PASSIVE_PIN);
+    } else {
+        gpio_hold_dis((gpio_num_t)LED_PASSIVE_PIN);
+    }
+
+    // MOSFET は必ず LOW で保持 (Deep Sleep 中の誤動作防止)
+    digitalWrite(MOSFET_GATE_PIN, LOW);
+    gpio_hold_en((gpio_num_t)MOSFET_GATE_PIN);
+
+    // Serial 出力完了を待つ
+    Serial.flush();
+
+    // Deep Sleep タイマー設定 & 移行
+    esp_sleep_enable_timer_wakeup(WAKE_INTERVAL_US);
+    esp_deep_sleep_start();
+
+    // ここには到達しない (Deep Sleep に移行済み)
+}
+
+// =====================================================================
+//  loop() — 未使用
+// =====================================================================
+/*
+ * Deep Sleep アーキテクチャでは loop() は呼ばれない。
+ * esp_deep_sleep_start() によりリセットがかかり、
+ * 次回は setup() から再実行されるため。
+ * 
+ * Arduino フレームワークの要件として空の loop() を定義しておく。
+ */
+void loop() {
+    // Deep Sleep アーキテクチャのため未使用
+    // ここに到達した場合は何かがおかしいので、安全のため Deep Sleep に入る
+    esp_deep_sleep_start();
+}
