@@ -52,10 +52,12 @@ pip install qutip numpy scipy matplotlib gymnasium stable-baselines3 sb3-contrib
 - `train_ai_demon.py` / `evaluate_ai_demon.py`: Training and evaluation scripts for the basic AI demon.
 - `train_ai_10dot_chain.py` / `evaluate_ai_10dot_chain.py`: Training and evaluation scripts using Recurrent PPO for the 10-dot chain.
 
-### Research Paper
-- `Quantum_Energy_Harvesting_Paper_English.tex`: The full research paper in English.
-- `Quantum_Energy_Harvesting_Paper_Revised.tex`: The full research paper in Japanese (Revised version).
-- `images/`: Directory containing generated plots and phase diagrams used in the paper.
+### Hardware Demonstration Device (`thermal_demo_design/`)
+- [作業手順書_構成D_自律給電デモ.md](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/作業手順書_構成D_自律給電デモ.md): **[NEW] Step-by-step assembly, flashing, calibration, and execution manual for Configuration D** (ESP32-C3 Deep Sleep + Diode-OR Hybrid Self-Powered Maxwell's Demon).
+- [部品リスト_構成D.md](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/部品リスト_構成D.md): Bill of Materials (BOM) and purchasing guide for Configuration D (~¥5,025).
+- [設計書_構成D_超低消費電力悪魔.md](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/設計書_構成D_超低消費電力悪魔.md): Theoretical energy budget and Diode-OR design specs.
+- [circuit_diagram_D.svg](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/circuit_diagram_D.svg): Circuit schematic diagram for Configuration D.
+- [maxwell_demon_harvester_esp32c3.ino](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/maxwell_demon_harvester_esp32c3.ino): Firmware source code for Seeed Studio XIAO ESP32-C3.
 
 ## Running the Code
 
