@@ -50,7 +50,11 @@
 
 ---
 
-### 3.1 ブレッドボード実体配置マップ (ASCII Visual Map)
+### 3.1 ブレッドボード実体配置マップ & 回路図
+
+![全体組立て・熱源配置構造図](/home/imaken/.gemini/antigravity/brain/07a95592-8906-4a10-a2e6-9702b8ab9e23/assembly_diagram.png)
+
+![構成D 回路接続ブロック図](/home/imaken/.gemini/antigravity/brain/07a95592-8906-4a10-a2e6-9702b8ab9e23/circuit_diagram_D.svg)
 
 ```
 ======================================================================================================================
