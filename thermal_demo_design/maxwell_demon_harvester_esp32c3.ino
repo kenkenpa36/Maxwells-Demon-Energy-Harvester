@@ -104,18 +104,16 @@ const float FLASH_CUTOFF_V   = 1.8;
 
 // --- パルス制御 ---
 // パルス持続時間 (ms): LED 点灯時間
-// 短いほど悪魔のアクティブ時間が減り、コストが下がる
-const int FLASH_DURATION_MS = 100;
+// 100ms → 500ms (0.5秒) に延長（はっきりと点滅が見える設定）
+const int FLASH_DURATION_MS = 500;
 
 // --- 実験フェーズ ---
 // 各フェーズの持続時間 (秒)
 const uint32_t PHASE_DURATION_S = 30;
 
 // --- 温度測定間隔 ---
-// DS18B20 は読取りに ~750ms かかるため、毎回読むとアクティブ時間が増大する。
-// 15 サイクルに 1 回だけ読取りを行い、省電力化する。
-// 中間サイクルでは RTC メモリに保持した直近の値を使用。
-const uint32_t TEMP_READ_INTERVAL = 15;
+// 10秒ごとのサイクルで毎回温度を計測更新する設定 (15 → 1)
+const uint32_t TEMP_READ_INTERVAL = 1;
 
 // --- ADC 設定 (ESP32-C3) ---
 // ESP32-C3 の ADC は 12bit (0-4095), 基準電圧 ~3.3V (実測で補正推奨)
