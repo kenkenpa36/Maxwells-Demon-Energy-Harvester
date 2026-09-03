@@ -326,7 +326,7 @@ void setup() {
     unsigned long wakeStartTime = millis();
 
     // ───────────────────────────────────────────────
-    //  GPIO & ADC 初期化
+    //  GPIO & Serial 初期化 (最優先でSerialを開く)
     // ───────────────────────────────────────────────
     pinMode(MOSFET_GATE_PIN, OUTPUT);
     pinMode(LED_PASSIVE_PIN, OUTPUT);
@@ -337,25 +337,26 @@ void setup() {
     analogSetAttenuation(ADC_11db);
     analogReadResolution(12);
 
+    // Serial を最優先で開始（USB CDC接続を維持するため）
+    Serial.begin(115200);
+
     // ───────────────────────────────────────────────
-    //  低電圧ブラウンアウト保護 (Low Voltage Brownout Protection)
+    //  低電圧ブラウンアウト保護 (USB接続時はスキップ)
     // ───────────────────────────────────────────────
     /*
-     * V_store < 3.0V の場合、エネルギー不足によるマイコン動作不安定を防ぎ、
-     * キャパシタ充電を優先するため即座に 30 秒間の Deep Sleep に移行する。
+     * V_store < 3.0V の場合、かつUSB電源(VOUT)がない場合のみスリープ移行。
+     * USB接続時はUSB CDCを切断させないためスリープしない。
      */
     float v_store_check = readVoltage(VSTORE_PIN);
-    if (v_store_check < 3.0) {
+    float v_out_check   = readVoltage(VOUT_PIN);
+
+    // USB電源がなく(v_out < 3.0)、かつ蓄電電圧も不足(v_store < 3.0)している場合のみ休眠
+    if (v_store_check < 3.0 && v_out_check < 3.0) {
         digitalWrite(MOSFET_GATE_PIN, LOW);
         gpio_hold_en((gpio_num_t)MOSFET_GATE_PIN);
         esp_sleep_enable_timer_wakeup(30000000ULL);  // 30秒 Deep Sleep
         esp_deep_sleep_start();
     }
-
-    // ───────────────────────────────────────────────
-    //  Serial 初期化
-    // ───────────────────────────────────────────────
-    Serial.begin(115200);
 
     // Deep Sleep 復帰直後は Serial が安定するまで少し待つ
     if (rtcData.experimentStartCycle == 0) {
