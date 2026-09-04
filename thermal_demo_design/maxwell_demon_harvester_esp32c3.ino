@@ -541,6 +541,7 @@ void loop() {
     // 10秒周期待機 (3秒点灯時間を考慮)
     int remainingDelay = 10000 - (flashed ? 3000 : 0);
     if (remainingDelay > 0) {
-        delay(remainingDelay);
+        esp_sleep_enable_timer_wakeup(remainingDelay * 1000ULL);
+        esp_deep_sleep_start();
     }
 }
