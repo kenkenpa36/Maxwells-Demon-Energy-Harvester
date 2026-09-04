@@ -77,9 +77,9 @@
 // =====================================================================
 #define ONE_WIRE_BUS      2    // DS18B20 データピン (左側1番目: A0/D0 = GPIO2)
 #define MOSFET_GATE_PIN   3    // MOSFET Gate 制御  (左側2番目: A1/D1 = GPIO3)
-#define LED_PASSIVE_PIN   4    // 赤色LED 制御       (左側3番目: A2/D2 = GPIO4)
-#define VSTORE_PIN        5    // VSTORE 電圧 ADC   (左側4番目: A3/D3 = GPIO5)
-#define VOUT_PIN          6    // VOUT 電圧 ADC     (左側5番目: SDA/D4 = GPIO6)
+#define VSTORE_PIN        4    // VSTORE 電圧 ADC   (左側3番目: A2/D2 = GPIO4) ★ADC1ピンに変更
+#define LED_PASSIVE_PIN   5    // 赤色LED 制御       (左側4番目: A3/D3 = GPIO5) ★デジタルピンに変更
+#define VOUT_PIN          6    // VOUT 電圧 (ADC非対応ピンのため今回は読み飛ばします)
 
 // =====================================================================
 //  定数
@@ -439,7 +439,7 @@ void loop() {
     float deltaT  = T_hot - T_cold;
 
     float V_store = readVoltage(VSTORE_PIN);
-    float V_out   = readVoltage(VOUT_PIN);
+    float V_out   = V_store; // GPIO6はADC非対応のためV_storeとほぼ同等として扱います
 
     // ───────────────────────────────────────────────
     //  制御ロジック
