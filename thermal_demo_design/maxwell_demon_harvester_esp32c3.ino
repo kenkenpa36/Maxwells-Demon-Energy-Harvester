@@ -328,8 +328,6 @@ void setup() {
     // ───────────────────────────────────────────────
     //  GPIO & Serial 初期化 (最優先でSerialを開く)
     // ───────────────────────────────────────────────
-    gpio_hold_dis((gpio_num_t)MOSFET_GATE_PIN);
-    gpio_hold_dis((gpio_num_t)LED_PASSIVE_PIN);
     pinMode(MOSFET_GATE_PIN, OUTPUT);
     pinMode(LED_PASSIVE_PIN, OUTPUT);
     digitalWrite(MOSFET_GATE_PIN, LOW);
@@ -355,7 +353,6 @@ void setup() {
     // USB電源がなく(v_out < 3.0)、かつ蓄電電圧も不足(v_store < 3.0)している場合のみ休眠
     if (v_store_check < 3.0 && v_out_check < 3.0) {
         digitalWrite(MOSFET_GATE_PIN, LOW);
-        gpio_hold_en((gpio_num_t)MOSFET_GATE_PIN);
         esp_sleep_enable_timer_wakeup(30000000ULL);  // 30秒 Deep Sleep
         esp_deep_sleep_start();
     }
@@ -728,16 +725,9 @@ void setup() {
      *   Hi-Z になる。これを防ぐため gpio_hold_en() で状態を保持する。
      */
 
-    // Phase A の場合: LED_passive の GPIO 状態を Deep Sleep 中も保持
-    if (!rtcData.feedbackMode) {
-        gpio_hold_en((gpio_num_t)LED_PASSIVE_PIN);
-    } else {
-        gpio_hold_dis((gpio_num_t)LED_PASSIVE_PIN);
-    }
-
-    // MOSFET は必ず LOW で保持 (Deep Sleep 中の誤動作防止)
+    // MOSFET / LED ピンリセット (Deep Sleep 移行前の消灯)
     digitalWrite(MOSFET_GATE_PIN, LOW);
-    gpio_hold_en((gpio_num_t)MOSFET_GATE_PIN);
+    digitalWrite(LED_PASSIVE_PIN, LOW);
 
     // Serial 出力完了を待つ
     Serial.flush();
