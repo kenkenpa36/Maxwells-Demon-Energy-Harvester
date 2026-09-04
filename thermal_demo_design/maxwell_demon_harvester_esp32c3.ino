@@ -358,10 +358,25 @@ void setup() {
     Serial.println();
     Serial.println(F("time_s,phase,T_hot_C,T_cold_C,deltaT_C,V_store_mV,V_out_mV,flash_count,E_extracted_mJ,demon_cost_mJ,net_work_mJ,avg_power_mW"));
 
+    // DS18B20 OneWire バス初期化 & プルアップ有効化
+    pinMode(ONE_WIRE_BUS, INPUT_PULLUP);
     sensors.begin();
-    sensors.requestTemperatures();
-    rtcData.lastT_hot  = sensors.getTempCByIndex(0);
-    rtcData.lastT_cold = sensors.getTempCByIndex(1);
+
+    int devCount = sensors.getDeviceCount();
+    Serial.print(F("【DS18B20 温度センサー検出数】: "));
+    Serial.print(devCount);
+    Serial.println(F(" 個"));
+
+    if (devCount > 0) {
+        sensors.requestTemperatures();
+        rtcData.lastT_hot = sensors.getTempCByIndex(0);
+        if (devCount > 1) {
+            rtcData.lastT_cold = sensors.getTempCByIndex(1);
+        } else {
+            rtcData.lastT_cold = rtcData.lastT_hot; // 1個の場合は同値を仮定
+        }
+    }
+
     if (rtcData.lastT_hot < -100) rtcData.lastT_hot = 0.0;
     if (rtcData.lastT_cold < -100) rtcData.lastT_cold = 0.0;
 }
@@ -405,12 +420,16 @@ void loop() {
     //  温度測定
     // ───────────────────────────────────────────────
     if (rtcData.cycleCount % TEMP_READ_INTERVAL == 0) {
+        pinMode(ONE_WIRE_BUS, INPUT_PULLUP);
         sensors.begin();
-        sensors.requestTemperatures();
-        float T_hot_new  = sensors.getTempCByIndex(0);
-        float T_cold_new = sensors.getTempCByIndex(1);
-        if (T_hot_new > -100)  rtcData.lastT_hot  = T_hot_new;
-        if (T_cold_new > -100) rtcData.lastT_cold = T_cold_new;
+        int devCount = sensors.getDeviceCount();
+        if (devCount > 0) {
+            sensors.requestTemperatures();
+            float T1 = sensors.getTempCByIndex(0);
+            float T2 = (devCount > 1) ? sensors.getTempCByIndex(1) : T1;
+            if (T1 > -100) rtcData.lastT_hot  = T1;
+            if (T2 > -100) rtcData.lastT_cold = T2;
+        }
     }
 
     float T_hot   = rtcData.lastT_hot;
@@ -446,10 +465,12 @@ void loop() {
             Serial.println(F(">>> [ACTUATOR] GREEN LED 3 SECONDS ON NOW! <<<"));
             Serial.flush();
 
-            // ─── MOSFET ON ➔ 緑色LED 3秒間しっかり点灯 ───
-            digitalWrite(MOSFET_GATE_PIN, HIGH);
+            // ─── MOSFET ON (GPIO3) ＆ 電源(GPIO4) の両方をHIGHにしてテスト ───
+            digitalWrite(MOSFET_GATE_PIN, HIGH);   // GPIO3 (MOSFET Gate)
+            digitalWrite(LED_PASSIVE_PIN, HIGH);  // GPIO4
             delay(3000);
             digitalWrite(MOSFET_GATE_PIN, LOW);
+            digitalWrite(LED_PASSIVE_PIN, LOW);
 
             float V_after = readVoltage(VSTORE_PIN);
             E_flash_mJ = 0.5 * SUPERCAP_F * (V_store * V_store - V_after * V_after) * 1000.0;
