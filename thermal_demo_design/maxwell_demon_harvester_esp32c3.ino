@@ -75,11 +75,11 @@
 // =====================================================================
 //  ピン定義 (XIAO ESP32-C3)
 // =====================================================================
-#define ONE_WIRE_BUS      2    // DS18B20 データピン (GPIO2)
-#define MOSFET_GATE_PIN   3    // MOSFET Gate — LED_demon 制御 (GPIO3)
-#define LED_PASSIVE_PIN   4    // LED_passive — Phase A 比較用 (GPIO4)
-#define VSTORE_PIN        0    // スーパーキャパシタ電圧 ADC (GPIO0/A0)
-#define VOUT_PIN          1    // VOUT 電圧 ADC (GPIO1/A1)
+#define ONE_WIRE_BUS      2    // DS18B20 データピン (左側1番目: A0/D0 = GPIO2)
+#define MOSFET_GATE_PIN   3    // MOSFET Gate 制御  (左側2番目: A1/D1 = GPIO3)
+#define LED_PASSIVE_PIN   4    // 赤色LED 制御       (左側3番目: A2/D2 = GPIO4)
+#define VSTORE_PIN        5    // VSTORE 電圧 ADC   (左側4番目: A3/D3 = GPIO5)
+#define VOUT_PIN          6    // VOUT 電圧 ADC     (左側5番目: SDA/D4 = GPIO6)
 
 // =====================================================================
 //  定数
