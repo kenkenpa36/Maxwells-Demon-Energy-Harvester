@@ -442,13 +442,14 @@ void loop() {
         digitalWrite(LED_PASSIVE_PIN, LOW);
 
         if (V_store >= FLASH_THRESHOLD_V) {
-            // ─── MOSFET ON ➔ 緑色LED 3回連続パルス点滅 (1.8秒間ピカ・ピカ・ピカ) ───
-            for (int i = 0; i < 3; i++) {
-                digitalWrite(MOSFET_GATE_PIN, HIGH);
-                delay(400);
-                digitalWrite(MOSFET_GATE_PIN, LOW);
-                delay(200);
-            }
+            // シリアルモニタへの動作告知
+            Serial.println(F(">>> [ACTUATOR] GREEN LED 3 SECONDS ON NOW! <<<"));
+            Serial.flush();
+
+            // ─── MOSFET ON ➔ 緑色LED 3秒間しっかり点灯 ───
+            digitalWrite(MOSFET_GATE_PIN, HIGH);
+            delay(3000);
+            digitalWrite(MOSFET_GATE_PIN, LOW);
 
             float V_after = readVoltage(VSTORE_PIN);
             E_flash_mJ = 0.5 * SUPERCAP_F * (V_store * V_store - V_after * V_after) * 1000.0;
@@ -514,8 +515,8 @@ void loop() {
 
     Serial.flush();
 
-    // 10秒周期待機 (3回パルス時間 1800ms を考慮)
-    int remainingDelay = 10000 - (flashed ? 1800 : 0);
+    // 10秒周期待機 (3秒点灯時間を考慮)
+    int remainingDelay = 10000 - (flashed ? 3000 : 0);
     if (remainingDelay > 0) {
         delay(remainingDelay);
     }
