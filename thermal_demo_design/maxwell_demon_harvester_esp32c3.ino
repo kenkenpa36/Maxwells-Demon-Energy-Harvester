@@ -448,9 +448,15 @@ void loop() {
     float E_flash_mJ = 0.0;
 
     if (!rtcData.feedbackMode) {
-        // Phase A: Feedback OFF
+        // Phase A: Feedback OFF (受動的)
+        // 悪魔の介入なし。温度計測などのベースライン消費のみ。
         digitalWrite(LED_PASSIVE_PIN, HIGH);
         digitalWrite(MOSFET_GATE_PIN, LOW);
+        
+        // Deep Sleepですぐ消えてしまうため、生存確認(Proof of life)として500msだけ光らせる
+        delay(500);
+        digitalWrite(LED_PASSIVE_PIN, LOW);
+        flashed = true; // 待機時間の計算用フラグを流用
 
         if (V_out > FLASH_CUTOFF_V) {
             float I_led_A = (V_out - FLASH_CUTOFF_V) / 330.0;
