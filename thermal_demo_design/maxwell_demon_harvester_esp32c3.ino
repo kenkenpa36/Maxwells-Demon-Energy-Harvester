@@ -333,30 +333,32 @@ void setup() {
     Serial.begin(115200);
     delay(1000);  // USB CDC 安定待ち
 
-    rtcData.feedbackMode          = false;  // Phase A から開始
-    rtcData.cycleCount            = 0;
-    rtcData.phaseStartCycle       = 0;
-    rtcData.flashCount_passive    = 0;
-    rtcData.flashCount_demon      = 0;
-    rtcData.totalEnergy_passive_mJ = 0.0;
-    rtcData.totalEnergy_demon_mJ  = 0.0;
-    rtcData.totalActiveTime_ms    = 0.0;
-    rtcData.lastT_hot             = 0.0;
-    rtcData.lastT_cold            = 0.0;
-    rtcData.experimentStartCycle  = 1;
+    if (rtcData.experimentStartCycle == 0) {
+        rtcData.feedbackMode          = false;  // Phase A から開始
+        rtcData.cycleCount            = 0;
+        rtcData.phaseStartCycle       = 0;
+        rtcData.flashCount_passive    = 0;
+        rtcData.flashCount_demon      = 0;
+        rtcData.totalEnergy_passive_mJ = 0.0;
+        rtcData.totalEnergy_demon_mJ  = 0.0;
+        rtcData.totalActiveTime_ms    = 0.0;
+        rtcData.lastT_hot             = 0.0;
+        rtcData.lastT_cold            = 0.0;
+        rtcData.experimentStartCycle  = 1;
 
-    Serial.println();
-    Serial.println(F("════════════════════════════════════════════════════"));
-    Serial.println(F(" Maxwell's Demon Energy Harvester v2.0"));
-    Serial.println(F(" Configuration D: ESP32-C3 USB Stable Telemetry Edition"));
-    Serial.println(F(" 情報エンジン検証デバイス — リアルタイムUSB計測・点滅制御版"));
-    Serial.println(F("════════════════════════════════════════════════════"));
-    Serial.println();
-    Serial.println(F("Phase A (30s): Feedback OFF — 悪魔なし（受動的）"));
-    Serial.println(F("Phase B (30s): Feedback ON  — 悪魔あり（緑色LED点滅制御）"));
-    Serial.println(F("════════════════════════════════════════════════════"));
-    Serial.println();
-    Serial.println(F("time_s,phase,T_hot_C,T_cold_C,deltaT_C,V_store_mV,V_out_mV,flash_count,E_extracted_mJ,demon_cost_mJ,net_work_mJ,avg_power_mW"));
+        Serial.println();
+        Serial.println(F("════════════════════════════════════════════════════"));
+        Serial.println(F(" Maxwell's Demon Energy Harvester v2.0"));
+        Serial.println(F(" Configuration D: ESP32-C3 USB Stable Telemetry Edition"));
+        Serial.println(F(" 情報エンジン検証デバイス — リアルタイムUSB計測・点滅制御版"));
+        Serial.println(F("════════════════════════════════════════════════════"));
+        Serial.println();
+        Serial.println(F("Phase A (30s): Feedback OFF — 悪魔なし（受動的）"));
+        Serial.println(F("Phase B (30s): Feedback ON  — 悪魔あり（緑色LED点滅制御）"));
+        Serial.println(F("════════════════════════════════════════════════════"));
+        Serial.println();
+        Serial.println(F("time_s,phase,T_hot_C,T_cold_C,deltaT_C,V_store_mV,V_out_mV,flash_count,E_extracted_mJ,demon_cost_mJ,net_work_mJ,avg_power_mW"));
+    }
 
     // DS18B20 OneWire バス初期化 & プルアップ有効化
     pinMode(ONE_WIRE_BUS, INPUT_PULLUP);
