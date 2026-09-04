@@ -328,6 +328,8 @@ void setup() {
     // ───────────────────────────────────────────────
     //  GPIO & Serial 初期化 (最優先でSerialを開く)
     // ───────────────────────────────────────────────
+    gpio_hold_dis((gpio_num_t)MOSFET_GATE_PIN);
+    gpio_hold_dis((gpio_num_t)LED_PASSIVE_PIN);
     pinMode(MOSFET_GATE_PIN, OUTPUT);
     pinMode(LED_PASSIVE_PIN, OUTPUT);
     digitalWrite(MOSFET_GATE_PIN, LOW);
