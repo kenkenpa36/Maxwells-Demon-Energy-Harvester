@@ -86,10 +86,9 @@
 // =====================================================================
 
 // --- Deep Sleep タイマー ---
-// 起床間隔: 10秒（μs 単位）: 自己駆動サイクルバッファ用
+// 起床間隔: 20秒（μs 単位）: 超省エネ・小温度差自律給電モード
 // Deep Sleep 中の消費電力: ~5μA @ 3.3V = 16.5μW
-// この間隔はキャパシタの充電時定数に対して十分短い
-const uint64_t WAKE_INTERVAL_US = 10000000ULL;  // 10秒
+const uint64_t WAKE_INTERVAL_US = 20000000ULL;  // 20秒
 
 // 低電圧ブラウンアウト保護閾値 (3.0V未満なら計測をスキップし即時ロングスリープ)
 const float LOW_VOLTAGE_GUARD_V = 3.0;
@@ -97,19 +96,17 @@ const uint64_t LONG_SLEEP_INTERVAL_US = 30000000ULL; // 30秒スリープ
 
 // --- 電圧閾値 ---
 // LED 点灯閾値: キャパシタ電圧がこの値を超えたらパルス発光
-// 論文対応: P[0] > threshold → ゲートを開く判定
 const float FLASH_THRESHOLD_V = 2.5;   // LED Vf + 余裕
 // LED 消灯閾値: この電圧まで放電したらパルス停止
 const float FLASH_CUTOFF_V   = 1.8;
 
 // --- パルス制御 ---
-// パルス持続時間 (ms): LED 点灯時間
-// 100ms → 500ms (0.5秒) に延長（はっきりと点滅が見える設定）
-const int FLASH_DURATION_MS = 500;
+// パルス持続時間 (ms): 超省エネ 200ms 点滅設定
+const int FLASH_DURATION_MS = 200;
 
 // --- 実験フェーズ ---
 // 各フェーズの持続時間 (秒)
-const uint32_t PHASE_DURATION_S = 30;
+const uint32_t PHASE_DURATION_S = 120;
 
 // --- 温度測定間隔 ---
 // 10秒ごとのサイクルで毎回温度を計測更新する設定 (15 → 1)
@@ -442,6 +439,19 @@ void loop() {
     float V_out   = V_store; // GPIO6はADC非対応のためV_storeとほぼ同等として扱います
 
     // ───────────────────────────────────────────────
+    //  自律動作インジケーター（赤色LED 2回連続「ピカッ・ピカッ」）
+    //  シリアルモニタがなくてもマイコンの自律起床・計測が目視で分かります
+    // ───────────────────────────────────────────────
+    digitalWrite(LED_PASSIVE_PIN, HIGH);
+    delay(40);
+    digitalWrite(LED_PASSIVE_PIN, LOW);
+    delay(60);
+    digitalWrite(LED_PASSIVE_PIN, HIGH);
+    delay(40);
+    digitalWrite(LED_PASSIVE_PIN, LOW);
+    delay(100);
+
+    // ───────────────────────────────────────────────
     //  制御ロジック
     // ───────────────────────────────────────────────
     bool flashed = false;
@@ -449,34 +459,32 @@ void loop() {
 
     if (!rtcData.feedbackMode) {
         // Phase A: Feedback OFF (受動的)
-        // 悪魔の介入なし。温度計測などのベースライン消費のみ。
         digitalWrite(LED_PASSIVE_PIN, HIGH);
         digitalWrite(MOSFET_GATE_PIN, LOW);
         
-        // Deep Sleepですぐ消えてしまうため、生存確認(Proof of life)として500msだけ光らせる
-        delay(500);
+        delay(FLASH_DURATION_MS);
         digitalWrite(LED_PASSIVE_PIN, LOW);
-        flashed = true; // 待機時間の計算用フラグを流用
+        flashed = true;
 
         if (V_out > FLASH_CUTOFF_V) {
             float I_led_A = (V_out - FLASH_CUTOFF_V) / 330.0;
             float P_led_mW = V_out * I_led_A * 1000.0;
-            rtcData.totalEnergy_passive_mJ += P_led_mW * 10.0;
+            rtcData.totalEnergy_passive_mJ += P_led_mW * (FLASH_DURATION_MS / 1000.0);
             rtcData.flashCount_passive++;
         }
     } else {
-        // Phase B: Feedback ON
+        // Phase B: Feedback ON (悪魔制御)
         digitalWrite(LED_PASSIVE_PIN, LOW);
 
         if (V_store >= FLASH_THRESHOLD_V) {
             // シリアルモニタへの動作告知
-            Serial.println(F(">>> [ACTUATOR] GREEN LED 3 SECONDS ON NOW! <<<"));
+            Serial.println(F(">>> [ACTUATOR] GREEN LED FLASH ON NOW! <<<"));
             Serial.flush();
 
-            // ─── MOSFET ON (GPIO3) ＆ 電源(GPIO4) の両方をHIGHにしてテスト ───
+            // ─── MOSFET ON (GPIO3) ＆ 電源(GPIO4) パルス発光 ───
             digitalWrite(MOSFET_GATE_PIN, HIGH);   // GPIO3 (MOSFET Gate)
             digitalWrite(LED_PASSIVE_PIN, HIGH);  // GPIO4
-            delay(3000);
+            delay(FLASH_DURATION_MS);
             digitalWrite(MOSFET_GATE_PIN, LOW);
             digitalWrite(LED_PASSIVE_PIN, LOW);
 
