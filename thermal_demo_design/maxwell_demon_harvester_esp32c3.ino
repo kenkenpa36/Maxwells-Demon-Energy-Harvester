@@ -71,6 +71,8 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <esp_sleep.h>
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 
 // =====================================================================
 //  ピン定義 (XIAO ESP32-C3)
@@ -322,6 +324,10 @@ void printPhaseSummary() {
  *   復帰時     → 即座に測定・制御ロジックを実行
  */
 void setup() {
+    // ブラウンアウト検出器（低電圧リセット）を無効化
+    // (TEG/キャパシタ給電時の起動スパイクによる不意のリセットを防止)
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+
     pinMode(MOSFET_GATE_PIN, OUTPUT);
     pinMode(LED_PASSIVE_PIN, OUTPUT);
     digitalWrite(MOSFET_GATE_PIN, LOW);
