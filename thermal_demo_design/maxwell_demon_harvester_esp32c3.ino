@@ -459,34 +459,18 @@ void loop() {
 
     if (!rtcData.feedbackMode) {
         // Phase A: Feedback OFF (受動的)
-        digitalWrite(LED_PASSIVE_PIN, HIGH);
-        digitalWrite(MOSFET_GATE_PIN, LOW);
-        
-        delay(FLASH_DURATION_MS);
-        digitalWrite(LED_PASSIVE_PIN, LOW);
         flashed = true;
-
-        if (V_out > FLASH_CUTOFF_V) {
-            float I_led_A = (V_out - FLASH_CUTOFF_V) / 330.0;
-            float P_led_mW = V_out * I_led_A * 1000.0;
-            rtcData.totalEnergy_passive_mJ += P_led_mW * (FLASH_DURATION_MS / 1000.0);
-            rtcData.flashCount_passive++;
-        }
     } else {
         // Phase B: Feedback ON (悪魔制御)
-        digitalWrite(LED_PASSIVE_PIN, LOW);
-
         if (V_store >= FLASH_THRESHOLD_V) {
             // シリアルモニタへの動作告知
             Serial.println(F(">>> [ACTUATOR] GREEN LED FLASH ON NOW! <<<"));
             Serial.flush();
 
-            // ─── MOSFET ON (GPIO3) ＆ 電源(GPIO4) パルス発光 ───
+            // ─── MOSFET ON (GPIO3) で緑色LEDのみパルス発光 ───
             digitalWrite(MOSFET_GATE_PIN, HIGH);   // GPIO3 (MOSFET Gate)
-            digitalWrite(LED_PASSIVE_PIN, HIGH);  // GPIO4
             delay(FLASH_DURATION_MS);
             digitalWrite(MOSFET_GATE_PIN, LOW);
-            digitalWrite(LED_PASSIVE_PIN, LOW);
 
             float V_after = readVoltage(VSTORE_PIN);
             E_flash_mJ = 0.5 * SUPERCAP_F * (V_store * V_store - V_after * V_after) * 1000.0;
@@ -501,7 +485,7 @@ void loop() {
     unsigned long activeTime_ms = millis() - wakeStartTime;
     rtcData.totalActiveTime_ms += (float)activeTime_ms;
 
-    float totalElapsed_s = rtcData.cycleCount * 10.0;
+    float totalElapsed_s = rtcData.cycleCount * (WAKE_INTERVAL_US / 1000000.0);
     float totalActive_s  = rtcData.totalActiveTime_ms / 1000.0;
     float totalSleep_s   = totalElapsed_s - totalActive_s;
     if (totalSleep_s < 0) totalSleep_s = 0;
@@ -525,7 +509,7 @@ void loop() {
     // ───────────────────────────────────────────────
     //  CSV データ出力
     // ───────────────────────────────────────────────
-    float time_s = rtcData.cycleCount * 10.0;
+    float time_s = rtcData.cycleCount * (WAKE_INTERVAL_US / 1000000.0);
     Serial.print(time_s, 1);
     Serial.print(",");
     Serial.print(rtcData.feedbackMode ? "B_ON" : "A_OFF");
@@ -552,10 +536,12 @@ void loop() {
 
     Serial.flush();
 
-    // 10秒周期待機 (3秒点灯時間を考慮)
-    int remainingDelay = 10000 - (flashed ? 3000 : 0);
-    if (remainingDelay > 0) {
-        esp_sleep_enable_timer_wakeup(remainingDelay * 1000ULL);
-        esp_deep_sleep_start();
-    }
+    // ───────────────────────────────────────────────
+    //  Deep Sleep 移行（すべてのLEDを消滅させて確実にスリープ）
+    // ───────────────────────────────────────────────
+    digitalWrite(MOSFET_GATE_PIN, LOW);
+    digitalWrite(LED_PASSIVE_PIN, LOW);
+
+    esp_sleep_enable_timer_wakeup(WAKE_INTERVAL_US);
+    esp_deep_sleep_start();
 }
