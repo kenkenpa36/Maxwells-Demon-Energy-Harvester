@@ -105,8 +105,8 @@ const float FLASH_CUTOFF_V   = 1.8;
 const int FLASH_DURATION_MS = 200;
 
 // --- 実験フェーズ ---
-// 各フェーズの持続時間 (秒)
-const uint32_t PHASE_DURATION_S = 120;
+// 各フェーズの持続時間 (秒): 40秒（20秒スリープ×2回でPhase Bへ移行）
+const uint32_t PHASE_DURATION_S = 40;
 
 // --- 温度測定間隔 ---
 // 10秒ごとのサイクルで毎回温度を計測更新する設定 (15 → 1)
@@ -537,10 +537,12 @@ void loop() {
     Serial.flush();
 
     // ───────────────────────────────────────────────
-    //  Deep Sleep 移行（すべてのLEDを消滅させて確実にスリープ）
+    //  Deep Sleep 移行（すべてのピンを内部プルダウンして確実に消灯）
     // ───────────────────────────────────────────────
     digitalWrite(MOSFET_GATE_PIN, LOW);
     digitalWrite(LED_PASSIVE_PIN, LOW);
+    pinMode(MOSFET_GATE_PIN, INPUT_PULLDOWN);
+    pinMode(LED_PASSIVE_PIN, INPUT_PULLDOWN);
 
     esp_sleep_enable_timer_wakeup(WAKE_INTERVAL_US);
     esp_deep_sleep_start();
