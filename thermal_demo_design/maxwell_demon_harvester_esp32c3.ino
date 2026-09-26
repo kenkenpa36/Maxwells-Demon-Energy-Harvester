@@ -4,12 +4,12 @@
  * 
  * 作品名: 『手ぶくろ要らず！体温と熱源で光る 電池ゼロのSOS防災ライト』
  * 
- * 微小温度差（ΔT < 3℃〜5℃）対応 発電効率向上の新アルゴリズム:
- *   1. CPUクロックの動的低減 (160MHz ➔ 80MHz: 起床時消費電流を約40%カット)
- *   2. DS18B20 9-bit高速変換 (変換時間を750ms ➔ 93.75msへ短縮、起床時間を8分位1に削減)
- *   3. 低電圧・微小温度差時のスマート拡張スリープ (45秒〜60秒へ自動延長、無駄な起床を徹底防止)
- *   4. エコSOSモールス発光 (微小温度差時は60ms/180msの省エネ短縮パルスでエネルギー40%節約)
- *   5. 最低点灯閾値の柔軟化 (ΔT >= 2.0℃、Vstore >= 2.4Vから動的動作サポート)
+ * 発電効率向上＆USB CDCシリアル通信安定化版:
+ *   1. DS18B20 9-bit高速変換 (変換時間を750ms ➔ 93.75msへ短縮、起床時間を8分位1に削減)
+ *   2. 低電圧・微小温度差時のスマート拡張スリープ (45秒〜60秒へ自動延長、無駄な起床を徹底防止)
+ *   3. エコSOSモールス発光 (微小温度差時は60ms/180msの省エネ短縮パルスでエネルギー40%節約)
+ *   4. 最低点灯閾値の柔軟化 (ΔT >= 2.0℃、Vstore >= 2.4Vから動的動作サポート)
+ *   5. USB CDC ログ通信の安定化 (直高信頼性 Serial 送信)
  * 
  * 接続 (XIAO ESP32-C3):
  *   GPIO2  — DS18B20 温度センサー (OneWire, 4.7kΩプルアップ)
@@ -133,9 +133,6 @@ void flashSOS(bool ecoMode) {
 //  セットアップ (毎サイクル復帰時に実行)
 // =====================================================================
 void setup() {
-    // ⚡ 発電効率向上 ①: CPUクロックを 160MHz ➔ 80MHz へ下げて起床時消費電力を大幅削減
-    setCpuFrequencyMhz(80);
-
     pinMode(MOSFET_GATE_PIN, OUTPUT);
     pinMode(LED_PASSIVE_PIN, OUTPUT);
     digitalWrite(MOSFET_GATE_PIN, LOW);
@@ -145,6 +142,7 @@ void setup() {
     analogReadResolution(12);
 
     Serial.begin(115200);
+    delay(3000); // 起動直後3秒のUSB待機時間（Deep SleepによるUSB切断ロックアウト防止＆ファームウェア書き込み保証）
 
     // 初回起動時のRTCメモリ初期化
     if (rtcData.experimentStartCycle == 0) {
@@ -161,9 +159,10 @@ void setup() {
         Serial.println(F(" Configuration D: Ultra-Low Power Adaptive Morse Engine"));
         Serial.println(F("════════════════════════════════════════════════════"));
         Serial.println(F("cycle,T_hot_C,T_cold_C,deltaT_C,V_store_mV,sos_count,total_energy_mJ,next_sleep_s"));
+        Serial.flush();
     }
 
-    // ⚡ 発電効率向上 ②: DS18B20 9-bit 解像度設定 (変換時間を 750ms ➔ 93ms に短縮)
+    // DS18B20 9-bit 解像度設定 (変換時間を 750ms ➔ 93ms に短縮)
     pinMode(ONE_WIRE_BUS, INPUT_PULLUP);
     sensors.begin();
     int devCount = sensors.getDeviceCount();
@@ -223,8 +222,7 @@ void loop() {
             nextSleepUs = SLEEP_ECO_US;  // 標準/低温度差: 25秒スリープ
         }
     } else {
-        // ⚡ 発電効率向上 ③: 充電優先スリープ制御
-        // 電圧が低い場合や微小温度差時はスリープを45秒〜60秒に延長し、蓄電を最優先
+        // 充電優先スリープ制御
         if (V_store < 1.0) {
             nextSleepUs = SLEEP_EMPTY_US; // 0V〜1.0V: 超充電優先 (60秒スリープ)
         } else {
@@ -252,6 +250,7 @@ void loop() {
     Serial.println((float)(nextSleepUs / 1000000ULL), 0);
 
     Serial.flush();
+    delay(50); // シリアルデータをUSBへ完全に送りきるための待ち時間
 
     // ───────────────────────────────────────────────
     //  Deep Sleep へ移行 (全ピン内部プルダウン)
