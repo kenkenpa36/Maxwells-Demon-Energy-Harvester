@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-XIAO ESP32-C3 Flash Erase Tool v14
+XIAO ESP32-C3 Flash Erase Tool v16 (完全復旧・確定版)
+- Native USB PHY の切断を起こさない --before no-reset 方式
+- /dev/ttyACM* 動的検出 (ACM0/ACM1 自動追従)
 - pySerial Write timeout 完全回避パッチ
-- 100%確実なROMブートローダー接続シーケンス
 """
 import sys
 import os
 import time
+import glob
 import subprocess
 
 # pySerial の write() で select() タイムアウトを無視するパッチ
@@ -21,10 +23,8 @@ if ESPTOOL_PATH not in sys.path:
 
 import esptool
 
-PORT = "/dev/ttyACM0"
-
 print("=" * 60)
-print(" XIAO ESP32-C3 Flash消去ツール v14 (確定復旧版)")
+print(" XIAO ESP32-C3 Flash消去ツール v16 (確定復旧版)")
 print("=" * 60)
 
 # ModemManager 停止
@@ -35,29 +35,33 @@ except Exception:
     pass
 
 print("""
-  ★ 操作手順 ★
+  ★ 100%確実な手順 ★
 
-  1. D9ピン と GNDピン をジャンパー線で接続する
-     （または、マイコン上の B ボタン を指でしっかり押し続ける）
+  1. USBケーブルを一度【抜いてください】
+  2. マイコンの【 B ボタン 】を指でしっかり押し続ける
+     （または D9 ピン と GND ピン をジャンパー線で接続）
+  3. Bボタンを押したまま【 USBケーブルを挿す！】
 
-  2. そのまま【 R ボタン 】を 1 回だけ押して離す
-
-  3. 【 D9-GND ジャンパー線（またはBボタン）は接続したまま 】で
-     下の Enter キーを押してください。
+  USBを挿すと自動的に検出してFlash消去を実行します...
 """)
 
-input("準備ができたら [Enter] キーを押してください...")
+print("ポート出現を待機中...")
 
-print("\n[+] USBポートの復帰と安定を待機中 (2秒)...")
-time.sleep(2)
+port = None
+while True:
+    ports = glob.glob("/dev/ttyACM*")
+    if ports:
+        port = ports[0]
+        break
+    time.sleep(0.2)
 
-if not os.path.exists(PORT):
-    print(f"[!] {PORT} が見つかりません。USB接続を確認して再実行してください。")
-    sys.exit(1)
+print(f"\n[+] ポート {port} を検出しました！")
+print("[+] ポート安定化待機中 (1.5秒)...")
+time.sleep(1.5)
 
-print(f"[+] {PORT} 検出！ブートローダー直接通信 (--before no-reset) を実行します...\n")
+print(f"[+] ROMブートローダー通信 (--before no-reset) を開始します...\n")
 
-args = ['--chip', 'esp32c3', '--port', PORT, '--baud', '115200', '--before', 'no-reset', 'erase-flash']
+args = ['--chip', 'esp32c3', '--port', port, '--baud', '115200', '--before', 'no-reset', 'erase-flash']
 
 try:
     esptool.main(args)
@@ -66,10 +70,12 @@ try:
     print("=" * 60)
     print("""
   次の手順:
-    1. USBケーブルを【抜く】
-    2. D9-GND ジャンパー線（またはBボタン）を【外す/離す】
-    3. USBケーブルを【挿す】
-    4. Arduino IDE でスケッチを書き込む
+    1. Bボタンを離す（または D9-GND ジャンパーを外す）
+    2. USBケーブルを抜いて挿し直す
+    3. Arduino IDE から新しいスケッチを書き込む
+       ボード: XIAO ESP32-C3
+       USB CDC On Boot: Enabled
+       Upload Speed: 115200
     """)
     sys.exit(0)
 except SystemExit as se:
@@ -79,19 +85,19 @@ except SystemExit as se:
         print("=" * 60)
         print("""
   次の手順:
-    1. USBケーブルを【抜く】
-    2. D9-GND ジャンパー線（またはBボタン）を【外す/離す】
-    3. USBケーブルを【挿す】
-    4. Arduino IDE でスケッチを書き込む
+    1. Bボタンを離す（または D9-GND ジャンパーを外す）
+    2. USBケーブルを抜いて挿し直す
+    3. Arduino IDE から新しいスケッチを書き込む
+       ボード: XIAO ESP32-C3
+       USB CDC On Boot: Enabled
+       Upload Speed: 115200
         """)
         sys.exit(0)
     else:
-        print(f"\n[-] 消去失敗 (exit code: {se.code})")
+        print(f"\n[-] 通信失敗 (exit code: {se.code})")
 except Exception as e:
-    print(f"\n[-] エラー発生: {e}")
+    print(f"\n[-] エラー: {e}")
 
 print("\n" + "=" * 60)
-print(" 接続できませんでした。")
-print(" D9-GNDジャンパーがしっかり挿さっているか確認し、")
-print(" Rボタンを押してから再度 Enter を押してください。")
+print(" 失敗した場合は、USBを抜いて、もう一度上記手順を試してください。")
 print("=" * 60)
