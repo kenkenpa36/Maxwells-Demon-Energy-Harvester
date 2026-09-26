@@ -185,7 +185,7 @@ void loop() {
 
     float T_hot   = rtcData.lastT_hot;
     float T_cold  = rtcData.lastT_cold;
-    float deltaT  = T_hot - T_cold;
+    float deltaT  = fabs(T_hot - T_cold); // 絶対値温度差で判定（DS18B20アドレス順序依存を解消）
     float V_store = readVoltage(VSTORE_PIN);
 
     // 起床インジケーター (黄色LED 短くピカッ 15ms)
