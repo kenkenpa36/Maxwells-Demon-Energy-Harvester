@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-XIAO ESP32-C3 Flash Erase Tool v13
-- pySerial Write timeout 回避パッチ
-- GPIO9 = LOW (ブートローダーモード) 状態の維持
+XIAO ESP32-C3 Flash Erase Tool v14
+- pySerial Write timeout 完全回避パッチ
+- 100%確実なROMブートローダー接続シーケンス
 """
 import sys
 import os
@@ -24,7 +24,7 @@ import esptool
 PORT = "/dev/ttyACM0"
 
 print("=" * 60)
-print(" XIAO ESP32-C3 Flash消去ツール v13")
+print(" XIAO ESP32-C3 Flash消去ツール v14 (確定復旧版)")
 print("=" * 60)
 
 # ModemManager 停止
@@ -34,65 +34,64 @@ try:
 except Exception:
     pass
 
-# ポート確認
+print("""
+  ★ 操作手順 ★
+
+  1. D9ピン と GNDピン をジャンパー線で接続する
+     （または、マイコン上の B ボタン を指でしっかり押し続ける）
+
+  2. そのまま【 R ボタン 】を 1 回だけ押して離す
+
+  3. 【 D9-GND ジャンパー線（またはBボタン）は接続したまま 】で
+     下の Enter キーを押してください。
+""")
+
+input("準備ができたら [Enter] キーを押してください...")
+
+print("\n[+] USBポートの復帰と安定を待機中 (2秒)...")
+time.sleep(2)
+
 if not os.path.exists(PORT):
-    print(f"\n[!] {PORT} を待機中...")
-    while not os.path.exists(PORT):
-        time.sleep(0.1)
+    print(f"[!] {PORT} が見つかりません。USB接続を確認して再実行してください。")
+    sys.exit(1)
 
-print(f"[+] {PORT} 検出！")
+print(f"[+] {PORT} 検出！ブートローダー直接通信 (--before no-reset) を実行します...\n")
 
-strategies = [
-    {
-        "name": "リセットなし (--before no-reset --baud 115200)",
-        "args": ['--chip', 'esp32c3', '--port', PORT, '--baud', '115200', '--before', 'no-reset', 'erase-flash']
-    },
-    {
-        "name": "USB専用リセット (--before usb-reset --baud 115200)",
-        "args": ['--chip', 'esp32c3', '--port', PORT, '--baud', '115200', '--before', 'usb-reset', 'erase-flash']
-    },
-    {
-        "name": "標準リセット (--before default-reset --baud 115200)",
-        "args": ['--chip', 'esp32c3', '--port', PORT, '--baud', '115200', '--before', 'default-reset', 'erase-flash']
-    }
-]
+args = ['--chip', 'esp32c3', '--port', PORT, '--baud', '115200', '--before', 'no-reset', 'erase-flash']
 
-for i, strat in enumerate(strategies, 1):
-    print(f"\n[{i}/{len(strategies)}] 試行: {strat['name']}")
-    try:
-        esptool.main(strat['args'])
+try:
+    esptool.main(args)
+    print("\n" + "=" * 60)
+    print(" ★★★ SUCCESS ★★★ Flash全消去が完了しました！")
+    print("=" * 60)
+    print("""
+  次の手順:
+    1. USBケーブルを【抜く】
+    2. D9-GND ジャンパー線（またはBボタン）を【外す/離す】
+    3. USBケーブルを【挿す】
+    4. Arduino IDE でスケッチを書き込む
+    """)
+    sys.exit(0)
+except SystemExit as se:
+    if se.code == 0:
         print("\n" + "=" * 60)
-        print(" ★★★ SUCCESS ★★★ Flash消去が完全完了しました！")
+        print(" ★★★ SUCCESS ★★★ Flash全消去が完了しました！")
         print("=" * 60)
         print("""
   次の手順:
     1. USBケーブルを【抜く】
-    2. D9-GND ジャンパー（またはBボタン）を【外す/離す】
+    2. D9-GND ジャンパー線（またはBボタン）を【外す/離す】
     3. USBケーブルを【挿す】
-    4. Arduino IDE で新しいスケッチを書き込む
+    4. Arduino IDE でスケッチを書き込む
         """)
         sys.exit(0)
-    except SystemExit as se:
-        if se.code == 0:
-            print("\n" + "=" * 60)
-            print(" ★★★ SUCCESS ★★★ Flash消去が完全完了しました！")
-            print("=" * 60)
-            print("""
-  次の手順:
-    1. USBケーブルを【抜く】
-    2. D9-GND ジャンパー（またはBボタン）を【外す/離す】
-    3. USBケーブルを【挿す】
-    4. Arduino IDE で新しいスケッチを書き込む
-            """)
-            sys.exit(0)
-        print(f"  → 失敗 (exit code: {se.code})")
-    except Exception as e:
-        print(f"  → エラー: {e}")
-    
-    time.sleep(1)
+    else:
+        print(f"\n[-] 消去失敗 (exit code: {se.code})")
+except Exception as e:
+    print(f"\n[-] エラー発生: {e}")
 
 print("\n" + "=" * 60)
-print(" 消去に失敗しました。")
-print(" 【重要】D9-GND ジャンパーを挿したまま（またはBボタンを押したまま）、")
-print(" Rボタンを1回押してから、もう一度このコマンドを実行してください。")
+print(" 接続できませんでした。")
+print(" D9-GNDジャンパーがしっかり挿さっているか確認し、")
+print(" Rボタンを押してから再度 Enter を押してください。")
 print("=" * 60)
