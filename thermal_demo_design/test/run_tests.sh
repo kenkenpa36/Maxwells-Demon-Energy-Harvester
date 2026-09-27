@@ -52,6 +52,9 @@ for idf_major in 4 5; do
     "$BUILD/test_sketch_idf$idf_major" || status=1
 done
 
+echo "== flash script tests (build directory selection)"
+bash "$HERE/test_flash_select.sh" || status=1
+
 if $want_coverage; then
     echo "== coverage (demon_policy.h)"
     PROFDATA="$(command -v llvm-profdata || xcrun -f llvm-profdata)"
