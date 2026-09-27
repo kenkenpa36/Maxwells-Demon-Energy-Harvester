@@ -6,31 +6,74 @@
 #   1. このスクリプトを実行する
 #   2. 「ポートを待機中...」と表示されたら、マイコンの B ボタンを押しながら R ボタンを1回押す
 #   3. 自動的に書き込みが開始されます
+#
+# 既定は v2 (発電効率向上版)。旧版を書き込む場合:
+#   SKETCH_NAME=maxwell_demon_harvester_esp32c3 ./flash_esp32c3.sh
+# ビルドキャッシュの検索先を変える場合: SEARCH_ROOT=/path ./flash_esp32c3.sh
 
+# ---------------------------------------------------------------------
+#  ビルドディレクトリ選択 (test/test_flash_select.sh でテスト)
+# ---------------------------------------------------------------------
+
+# find_build_dir <sketch name> <search root>
+#   "<sketch name>.ino.bin" に完全一致するファイルを探し、最新のものの
+#   ディレクトリを出力する。前方一致 (v1 名で v2 に一致する等) はしない。
+find_build_dir() {
+    local name=$1 root=$2 newest="" candidate
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        if [ -z "$newest" ] || [ "$candidate" -nt "$newest" ]; then
+            newest=$candidate
+        fi
+    done < <(find "$root" -name "${name}.ino.bin" 2>/dev/null)
+    [ -n "$newest" ] || return 1
+    dirname "$newest"
+}
+
+# verify_artifacts <build dir> <sketch name>
+#   esptool に渡す 3 つのバイナリが揃っているか確認する。
+verify_artifacts() {
+    local dir=$1 name=$2 f ok=0
+    for f in "${name}.ino.bootloader.bin" "${name}.ino.partitions.bin" "${name}.ino.bin"; do
+        if [ ! -f "$dir/$f" ]; then
+            echo "見つかりません: $dir/$f"
+            ok=1
+        fi
+    done
+    return $ok
+}
+
+# ライブラリとして source された場合はここで終了 (テスト用)
+if [ -n "${FLASH_ESP32C3_LIB_ONLY:-}" ]; then
+    return 0 2>/dev/null || exit 0
+fi
+
+# ---------------------------------------------------------------------
+#  メイン
+# ---------------------------------------------------------------------
 echo "════════════════════════════════════════════════════"
 echo " ESP32-C3 自動書き込みツール"
 echo " ポート出現を監視し、即座にフラッシュ書き込みを行います"
 echo "════════════════════════════════════════════════════"
 echo ""
 
-# コンパイル済みバイナリのパスを検索
-SKETCH_NAME="maxwell_demon_harvester_esp32c3"
-BUILD_DIR=$(find /tmp -name "${SKETCH_NAME}.ino.bin" -newer /tmp -printf '%h\n' 2>/dev/null | head -1)
+SKETCH_NAME="${SKETCH_NAME:-maxwell_demon_harvester_esp32c3_v2}"
+SEARCH_ROOT="${SEARCH_ROOT:-/tmp}"
 
-if [ -z "$BUILD_DIR" ]; then
-    # Arduino IDE 2.x のビルドキャッシュを検索
-    BUILD_DIR=$(find /tmp -path "*${SKETCH_NAME}*" -name "*.ino.bin" 2>/dev/null | head -1)
-    if [ -n "$BUILD_DIR" ]; then
-        BUILD_DIR=$(dirname "$BUILD_DIR")
-    fi
+# コンパイル済みバイナリのパスを検索 (Arduino IDE 2.x のビルドキャッシュ)
+BUILD_DIR=$(find_build_dir "$SKETCH_NAME" "$SEARCH_ROOT")
+if [ -n "$BUILD_DIR" ] && ! verify_artifacts "$BUILD_DIR" "$SKETCH_NAME"; then
+    echo "ビルドディレクトリ $BUILD_DIR に必要なバイナリが揃っていません。"
+    BUILD_DIR=""
 fi
 
 # esptool のパスを検索
-ESPTOOL=$(find /home/imaken/.arduino15 -name "esptool" -o -name "esptool.py" 2>/dev/null | head -1)
+ESPTOOL=$(find "${HOME}/.arduino15" -name "esptool" -o -name "esptool.py" 2>/dev/null | head -1)
 if [ -z "$ESPTOOL" ]; then
     ESPTOOL=$(which esptool.py 2>/dev/null || which esptool 2>/dev/null)
 fi
 
+echo "スケッチ: $SKETCH_NAME"
 echo "esptool: $ESPTOOL"
 echo "ビルドディレクトリ: $BUILD_DIR"
 echo ""
@@ -47,7 +90,7 @@ while true; do
     if [ -e "$PORT" ]; then
         echo "★ ポート $PORT を検出！即座に書き込みを開始します..."
         sleep 0.2
-        
+
         if [ -n "$ESPTOOL" ] && [ -n "$BUILD_DIR" ]; then
             $ESPTOOL --chip esp32c3 --port $PORT --baud 460800 \
                 --before default_reset --after hard_reset \
