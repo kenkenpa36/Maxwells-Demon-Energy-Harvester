@@ -79,6 +79,19 @@ TEST(eco_boundary_switches_to_full_power_at_eco_delta_t) {
     CHECK(decideDemon(3.0f, cfg.ecoDeltaT - 0.1f, cfg).eco == true);
 }
 
+TEST(does_not_act_on_stale_delta_t_when_this_cycle_sensor_read_failed) {
+    // Both probes unplugged after a valid 35/20 C cycle: RTC still holds a
+    // 15 C difference, but the demon must not flash on stale data.
+    Decision d = decideDemon(3.0f, 15.0f, cfg, /*temperatureValid=*/false);
+    CHECK(!d.act);
+    CHECK(!d.eco);
+}
+
+TEST(temperature_validity_defaults_to_true_for_existing_callers) {
+    CHECK(decideDemon(3.0f, 15.0f, cfg).act);
+    CHECK(decideDemon(3.0f, 15.0f, cfg, true).act);
+}
+
 // ───────────────────────── J2: selectSleepUs ─────────────────────────
 
 TEST(after_flash_high_delta_t_sleeps_fast) {
@@ -134,6 +147,21 @@ TEST(prediction_uses_maximum_sleep_when_voltage_is_not_rising) {
 TEST(prediction_falls_back_to_static_rule_without_history) {
     CHECK(predictChargeSleepUs(2.0f, 0.0f, 0ULL, cfg) == selectSleepUs(false, 2.0f, 10.0f, cfg));
     CHECK(predictChargeSleepUs(0.5f, 0.0f, 0ULL, cfg) == cfg.sleepEmptyUs);
+}
+
+TEST(prediction_tolerates_float_representation_error_in_round_up) {
+    // 2.2 V -> 2.3 V over 25 s; need 0.1 V. In float arithmetic this comes out
+    // as 25.00006 s, which must still round to 25 s, not 26 s.
+    CHECK(predictChargeSleepUs(2.3f, 2.2f, 25000000ULL, cfg) == 25000000ULL);
+}
+
+TEST(prediction_at_exact_threshold_uses_eco_sleep) {
+    CHECK(predictChargeSleepUs(cfg.flashThresholdV, 2.3f, 25000000ULL, cfg) == cfg.sleepEcoUs);
+}
+
+TEST(prediction_with_negligible_charge_rate_does_not_overflow) {
+    // 1 nV rise over 60 s -> astronomically long estimate: must clamp, not UB.
+    CHECK(predictChargeSleepUs(1.000000001f, 1.0f, 60000000ULL, cfg) == cfg.sleepEmptyUs);
 }
 
 TEST(prediction_with_voltage_already_above_threshold_uses_eco_sleep) {
@@ -219,6 +247,34 @@ TEST(morse_timing_struct_matches_mode) {
     CHECK(t.dotMs == 60 && t.dashMs == 180 && t.gapMs == 60);
     t = morseTiming(false);
     CHECK(t.dotMs == 100 && t.dashMs == 300 && t.gapMs == 100);
+}
+
+TEST(sos_pattern_is_three_dots_three_dashes_three_dots) {
+    CHECK(SOS_SYMBOL_COUNT == 9);
+    for (unsigned i = 0; i < SOS_SYMBOL_COUNT; ++i) {
+        bool expectDash = (i >= 3 && i < 6);
+        CHECK(sosSymbolIsDash(i) == expectDash);
+    }
+}
+
+TEST(sos_letter_gap_follows_first_s_and_o_only) {
+    const MorseTiming t = morseTiming(false);
+    // Ordinary symbol gap after symbols 0,1,3,4,6,7,8; letter gap (3x) after 2 and 5.
+    CHECK(sosGapAfterMs(0, t) == t.gapMs);
+    CHECK(sosGapAfterMs(2, t) == 3 * t.gapMs);
+    CHECK(sosGapAfterMs(5, t) == 3 * t.gapMs);
+    CHECK(sosGapAfterMs(8, t) == t.gapMs);
+}
+
+TEST(morse_totals_are_derived_from_the_sos_pattern) {
+    const MorseTiming t = morseTiming(true);
+    unsigned on = 0, total = 0;
+    for (unsigned i = 0; i < SOS_SYMBOL_COUNT; ++i) {
+        on += sosSymbolOnMs(i, t);
+        total += sosSymbolOnMs(i, t) + sosGapAfterMs(i, t);
+    }
+    CHECK(on == morseOnTimeMs(true));
+    CHECK(total == morseTotalMs(true));
 }
 
 }  // namespace
