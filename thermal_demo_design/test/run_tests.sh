@@ -44,6 +44,14 @@ fi
 status=$?
 set -e
 
+
+echo "== sketch tests (setup/loop against stateful fakes)"
+for idf_major in 4 5; do
+    "$CXX" -std=c++17 -Wall -Wextra -O0 -g -DSTUB_IDF_MAJOR="$idf_major" \
+        -I"$HERE/stubs" "$HERE/test_sketch.cpp" -o "$BUILD/test_sketch_idf$idf_major"
+    "$BUILD/test_sketch_idf$idf_major" || status=1
+done
+
 if $want_coverage; then
     echo "== coverage (demon_policy.h)"
     PROFDATA="$(command -v llvm-profdata || xcrun -f llvm-profdata)"

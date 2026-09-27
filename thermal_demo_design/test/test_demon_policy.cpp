@@ -159,6 +159,12 @@ TEST(prediction_at_exact_threshold_uses_eco_sleep) {
     CHECK(predictChargeSleepUs(cfg.flashThresholdV, 2.3f, 25000000ULL, cfg) == cfg.sleepEcoUs);
 }
 
+TEST(clamp_sleep_bounds_both_ends) {
+    CHECK(clampSleepUs(1ULL, cfg) == cfg.sleepFastUs);
+    CHECK(clampSleepUs(999000000ULL, cfg) == cfg.sleepEmptyUs);
+    CHECK(clampSleepUs(30000000ULL, cfg) == 30000000ULL);
+}
+
 TEST(prediction_with_negligible_charge_rate_does_not_overflow) {
     // 1 nV rise over 60 s -> astronomically long estimate: must clamp, not UB.
     CHECK(predictChargeSleepUs(1.000000001f, 1.0f, 60000000ULL, cfg) == cfg.sleepEmptyUs);

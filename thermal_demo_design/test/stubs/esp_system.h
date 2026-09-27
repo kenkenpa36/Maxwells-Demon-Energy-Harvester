@@ -1,5 +1,6 @@
-// Stub of ESP-IDF esp_system.h for host-side syntax checking.
+// Stateful fake of ESP-IDF esp_system.h (see fake::State in Arduino.h).
 #pragma once
+#include "Arduino.h"
 
 typedef enum {
     ESP_RST_UNKNOWN,
@@ -15,4 +16,6 @@ typedef enum {
     ESP_RST_SDIO,
 } esp_reset_reason_t;
 
-inline esp_reset_reason_t esp_reset_reason() { return ESP_RST_POWERON; }
+inline esp_reset_reason_t esp_reset_reason() {
+    return static_cast<esp_reset_reason_t>(fake::state().resetReason);
+}
