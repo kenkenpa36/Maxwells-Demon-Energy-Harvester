@@ -136,9 +136,11 @@ TEST(prediction_falls_back_to_static_rule_without_history) {
     CHECK(predictChargeSleepUs(0.5f, 0.0f, 0ULL, cfg) == cfg.sleepEmptyUs);
 }
 
-TEST(prediction_with_voltage_already_above_threshold_uses_minimum_sleep) {
-    // Capacitor is ready but ΔT was too small to flash: check again soon.
-    CHECK(predictChargeSleepUs(2.6f, 2.5f, 25000000ULL, cfg) == cfg.sleepFastUs);
+TEST(prediction_with_voltage_already_above_threshold_uses_eco_sleep) {
+    // Capacitor is ready but ΔT was too small to flash: re-check at the
+    // standard interval so a hand placed on the plate is noticed without
+    // draining the capacitor with rapid wake-ups.
+    CHECK(predictChargeSleepUs(2.6f, 2.5f, 25000000ULL, cfg) == cfg.sleepEcoUs);
 }
 
 // ───────────────────────── J3: startupWaitBudgetMs ─────────────────────────
