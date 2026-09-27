@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 
 namespace {
 
@@ -166,8 +167,15 @@ TEST(clamp_sleep_bounds_both_ends) {
 }
 
 TEST(prediction_with_negligible_charge_rate_does_not_overflow) {
-    // 1 nV rise over 60 s -> astronomically long estimate: must clamp, not UB.
-    CHECK(predictChargeSleepUs(1.000000001f, 1.0f, 60000000ULL, cfg) == cfg.sleepEmptyUs);
+    // Smallest positive float rise over 60 s: the estimate (~1e40 s) exceeds
+    // uint64_t range, so the pre-cast guard must clamp instead of casting (UB).
+    const float tiny = std::numeric_limits<float>::min();
+    CHECK(tiny > 0.0f);
+    CHECK(predictChargeSleepUs(tiny, 0.0f, 60000000ULL, cfg) == cfg.sleepEmptyUs);
+    // One ULP above 1.0 V over 60 s (~7e8 s): beyond the maximum sleep, still clamped.
+    const float oneUlpUp = std::nextafter(1.0f, 2.0f);
+    CHECK(oneUlpUp > 1.0f);
+    CHECK(predictChargeSleepUs(oneUlpUp, 1.0f, 60000000ULL, cfg) == cfg.sleepEmptyUs);
 }
 
 TEST(prediction_with_voltage_already_above_threshold_uses_eco_sleep) {
