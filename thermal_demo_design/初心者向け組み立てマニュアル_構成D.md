@@ -453,17 +453,22 @@ USBからの電源と、TEGからの電源をスムーズに切り替えるた�
 6. `Tools > Manage Libraries` を開き、以下の2つのライブラリをインストールします:
    - `OneWire`
    - `DallasTemperature`
-7. ソースコード `maxwell_demon_harvester_esp32c3.ino` を開きます。（ファイルパス: [maxwell_demon_harvester_esp32c3.ino](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/maxwell_demon_harvester_esp32c3.ino) ）
+7. スケッチ用フォルダ `maxwell_demon_harvester_esp32c3_v2` を作り、その中に **2 つのファイル** をコピーします:
+   - `maxwell_demon_harvester_esp32c3_v2.ino`（本体・v2 発電効率向上版。旧版 `maxwell_demon_harvester_esp32c3.ino` もそのまま残しています）
+   - `demon_policy.h`（判断ロジック。同じフォルダに無いとコンパイルエラーになります）
+   
+   その後 IDE で `maxwell_demon_harvester_esp32c3_v2.ino` を開きます。
 8. XIAO ESP32-C3 をUSB-CケーブルでPCに繋ぎます。
 9. `Tools > Port` から認識されたポートを選びます。
 10. 左上の「→」ボタン（Upload）を押して書き込みます。
 
 > [!NOTE]
-> ファームウェア設定:
-> - Wake interval: 10秒 (Deep Sleep)
-> - Flash threshold: V_store > 2.5V
-> - Low voltage guard: V_store < 3.0V → 30s long sleep
-> - Baud rate: 115200
+> ファームウェア設定 (v2 発電効率向上版、`demon_policy.h` の `DEFAULT_CONFIG` で変更可):
+> - Flash threshold: V_store ≥ 2.4V かつ ΔT ≥ 0.5℃
+> - Sleep interval: 12秒 (ΔT ≥ 8℃) / 25秒 (3〜8℃) / 45秒 (充電優先) / 60秒 (V_store < 1.0V)。充電中は充電速度から到達時刻を予測して 12〜60 秒の範囲で自動調整
+> - USB 待機: 初回起動のみ 3 秒。以降は USB ホストを検出した時だけ最大 1.5 秒待機（USB 未接続なら 0.2 秒）
+> - Baud rate: 115200（USB CDC のため実際の速度は無関係）
+> - CSV ログ末尾に `W_active_mJ,W_net_total_mJ,awake_ms`（起床中の消費とそれを含めた正味仕事）が追加されています
 
 ✅ **確認:** 「Done uploading」と表示されれば成功です！
 

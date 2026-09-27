@@ -57,7 +57,10 @@ pip install qutip numpy scipy matplotlib gymnasium stable-baselines3 sb3-contrib
 - [部品リスト_構成D.md](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/部品リスト_構成D.md): Bill of Materials (BOM) and purchasing guide for Configuration D (~¥5,025).
 - [設計書_構成D_超低消費電力悪魔.md](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/設計書_構成D_超低消費電力悪魔.md): Theoretical energy budget and Diode-OR design specs.
 - [circuit_diagram_D.svg](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/circuit_diagram_D.svg): Circuit schematic diagram for Configuration D.
-- [maxwell_demon_harvester_esp32c3.ino](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/maxwell_demon_harvester_esp32c3.ino): Firmware source code for Seeed Studio XIAO ESP32-C3.
+- [maxwell_demon_harvester_esp32c3.ino](file:///home/imaken/notebook_project/Maxwells_demon/thermal_demo_design/maxwell_demon_harvester_esp32c3.ino): Firmware source code for Seeed Studio XIAO ESP32-C3. (v1, kept unchanged).
+- `thermal_demo_design/maxwell_demon_harvester_esp32c3_v2.ino`: **v2 firmware with reduced wake-time energy waste** (first-boot-only USB wait, 80 MHz CPU, sensor conversion overlap, dV/dt-predicted charging sleep, awake-cost logging). Requires `demon_policy.h` in the same sketch folder.
+- `thermal_demo_design/demon_policy.h`: Hardware-independent decision logic of the demon (thresholds, adaptive sleep prediction, energy accounting, Morse timing).
+- `thermal_demo_design/test/run_tests.sh`: Host-side unit tests for `demon_policy.h` (clang++; `--coverage` prints llvm-cov coverage, `--syntax` syntax-checks the sketch against Arduino stubs).
 
 ## Running the Code
 

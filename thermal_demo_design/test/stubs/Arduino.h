@@ -1,5 +1,5 @@
 // Minimal Arduino / ESP32 API stub for host-side syntax checking of the sketch.
-// Only the symbols used by maxwell_demon_harvester_esp32c3.ino are declared.
+// Only the symbols used by maxwell_demon_harvester_esp32c3_v2.ino are declared.
 #pragma once
 
 #include <cstdint>

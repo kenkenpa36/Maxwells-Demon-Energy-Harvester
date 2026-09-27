@@ -55,10 +55,10 @@ if $want_coverage; then
 fi
 
 if $want_syntax; then
-    echo "== syntax check: maxwell_demon_harvester_esp32c3.ino (Arduino stubs)"
+    echo "== syntax check: maxwell_demon_harvester_esp32c3_v2.ino (Arduino stubs)"
     "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -x c++ \
         -I"$HERE/stubs" -include "$HERE/stubs/Arduino.h" \
-        "$SKETCH_DIR/maxwell_demon_harvester_esp32c3.ino"
+        "$SKETCH_DIR/maxwell_demon_harvester_esp32c3_v2.ino"
     echo "   ok"
 fi
 

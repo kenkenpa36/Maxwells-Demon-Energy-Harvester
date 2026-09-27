@@ -1,7 +1,7 @@
 /*
  * demon_policy.h — マクスウェルの悪魔 制御ポリシー (純ロジック)
  *
- * ESP32-C3 ファームウェア (maxwell_demon_harvester_esp32c3.ino) から
+ * ESP32-C3 ファームウェア (maxwell_demon_harvester_esp32c3_v2.ino) から
  * ハードウェア非依存の判断ロジックだけを切り出したヘッダ。
  * Arduino API に依存しないため、ホスト側 (clang++/g++) で単体テストできる:
  *
