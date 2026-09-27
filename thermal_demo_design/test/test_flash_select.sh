@@ -9,12 +9,21 @@ FLASH_SCRIPT="$HERE/../flash_esp32c3.sh"
 
 failures=0
 checks=0
-check() {  # check <description> <condition...>
+check() {  # check <description> <command...>   (expects success)
     local desc=$1; shift
     checks=$((checks + 1))
     if ! "$@"; then
         failures=$((failures + 1))
         echo "  FAIL: $desc"
+    fi
+}
+
+check_fails() {  # check_fails <description> <command...>   (expects failure)
+    local desc=$1; shift
+    checks=$((checks + 1))
+    if "$@" >/dev/null 2>&1; then
+        failures=$((failures + 1))
+        echo "  FAIL (expected failure): $desc"
     fi
 }
 
@@ -48,17 +57,17 @@ echo "- newest matching build wins among several v1 builds"
 check "newest v1" test "$(find_build_dir "$V1" "$ROOT")" != "$ROOT/build-v1-old"
 
 echo "- no match returns failure"
-check "no match" ! find_build_dir "does_not_exist" "$ROOT" >/dev/null
+check_fails "no match" find_build_dir "does_not_exist" "$ROOT"
 
 echo "- verify_artifacts passes on a complete directory"
 check "complete" verify_artifacts "$ROOT/build-v1" "$V1"
 
 echo "- verify_artifacts fails when the requested names are missing in the chosen directory"
-check "wrong version in dir" ! verify_artifacts "$ROOT/build-v2" "$V1" >/dev/null
+check_fails "wrong version in dir" verify_artifacts "$ROOT/build-v2" "$V1"
 
 rm "$ROOT/build-v1/$V1.ino.bootloader.bin"
 echo "- verify_artifacts fails when the bootloader image is missing"
-check "missing bootloader" ! verify_artifacts "$ROOT/build-v1" "$V1" >/dev/null
+check_fails "missing bootloader" verify_artifacts "$ROOT/build-v1" "$V1"
 
 echo
 echo "$checks checks, $failures failures (flash_esp32c3.sh)"

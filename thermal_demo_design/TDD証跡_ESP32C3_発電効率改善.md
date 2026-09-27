@@ -151,6 +151,7 @@ Astra 3 回目: **PASS**（HIGH/CRITICAL 0、MEDIUM 2: オーバーフロー回�
 
 - `demon_policy.h`: 行・関数・分岐すべて **100%**（`./test/run_tests.sh --coverage`、最終 79 チェック）。
 - スケッチ本体: `test_sketch.cpp` の統合テスト 44 チェック × IDF 4.x / 5.x（起動時 USB 待機の 5 シナリオ、センサ探索・故障・復帰、発光とスリープ選択、エネルギー列の整合）。
+- 書き込みスクリプト: `test_flash_select.sh` 7 チェック（v1/v2 のビルド選択、最新優先、バイナリ不足の検出）。
 - **未検証（ホストでは不可能）**: `.ino` 本体の実機動作。特に以下は実機で確認が必要:
   - USB ホスト検出（IDF ≥5: `usb_serial_jtag_is_connected()` による SOF 検出 + `Serial` の bool 判定、IDF 4.4: `Serial` のみ）が実機で期待通り動くこと。core 2.x ではホスト未記憶時の 0.3 s プローブ中にモニタ再接続を検出できないため、ログ採取は「電源投入直後 3 秒以内にモニタを開く（以降はホスト記憶で最大 3 s 待つ）」運用が前提。
   - `arduino-cli` が無いため実コアヘッダに対するコンパイルは未実施（スタブ構文チェックのみ）。
@@ -171,4 +172,11 @@ Astra 3 回目: **PASS**（HIGH/CRITICAL 0、MEDIUM 2: オーバーフロー回�
 - GREEN 2: `14d2421` — `73 checks, 0 failures`、行 100% / 分岐 98%、IDF 4.x/5.x 構文チェック ok。
 - RED 3: `3162624` — スケッチ統合テスト、IDF 4.x 11 件 / 5.x 8 件の失敗。
 - GREEN 3: `967ca33` — ポリシー 76/0、スケッチ 44/0 × 2、カバレッジ 100%、構文 ok × 2。
-- 最終: 後続コミット（Astra 3 回目 PASS 後の MEDIUM 対応と文書更新）。
+- Docs: `fbb5133` — Astra 3 回目 PASS 後の MEDIUM 対応と文書更新。
+- RED 4: `23bffd8` — `flash_esp32c3.sh` のビルドディレクトリ選択テスト（source するとポート待機ループに入る = 関数未実装）。
+- GREEN 4: 後続コミット — `find_build_dir`（スケッチ名完全一致・最新優先）と `verify_artifacts`（3 バイナリ確認）を追加、7 checks / 0 failures。
+
+### Astra 4 回目（再実行、FAIL HIGH 1）→ 4 周目 RED/GREEN
+
+指摘: `flash_esp32c3.sh` のフォールバック検索 `-path "*${SKETCH_NAME}*"` が、`SKETCH_NAME=maxwell_demon_harvester_esp32c3`（旧版）指定時に v2 のビルドにも一致し、v2 ディレクトリ内の v1 ファイル名で esptool が失敗する（妥当）。
+対応: 検索を `"<name>.ino.bin"` の完全一致にし最新のものを選ぶ `find_build_dir` と、書き込み前に 3 バイナリを確認する `verify_artifacts` に分離。`FLASH_ESP32C3_LIB_ONLY=1` で source 可能にし `test/test_flash_select.sh` で v1/v2 の選択・最新優先・不足検出を検証。
