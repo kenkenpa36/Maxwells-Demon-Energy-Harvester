@@ -55,11 +55,15 @@ if $want_coverage; then
 fi
 
 if $want_syntax; then
-    echo "== syntax check: maxwell_demon_harvester_esp32c3_v2.ino (Arduino stubs)"
-    "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -x c++ \
-        -I"$HERE/stubs" -include "$HERE/stubs/Arduino.h" \
-        "$SKETCH_DIR/maxwell_demon_harvester_esp32c3_v2.ino"
-    echo "   ok"
+    # Both arduino-esp32 core generations: 2.x (ESP-IDF 4.4) and 3.x (ESP-IDF 5.x).
+    for idf_major in 4 5; do
+        echo "== syntax check: maxwell_demon_harvester_esp32c3_v2.ino (Arduino stubs, IDF ${idf_major}.x)"
+        "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -x c++ \
+            -DSTUB_IDF_MAJOR="$idf_major" \
+            -I"$HERE/stubs" -include "$HERE/stubs/Arduino.h" \
+            "$SKETCH_DIR/maxwell_demon_harvester_esp32c3_v2.ino"
+        echo "   ok"
+    done
 fi
 
 exit $status

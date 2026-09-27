@@ -14,7 +14,8 @@ echo "════════════════════════�
 echo ""
 
 # コンパイル済みバイナリのパスを検索
-SKETCH_NAME="maxwell_demon_harvester_esp32c3"
+# 既定は v2 (発電効率向上版)。旧版を書き込む場合: SKETCH_NAME=maxwell_demon_harvester_esp32c3 ./flash_esp32c3.sh
+SKETCH_NAME="${SKETCH_NAME:-maxwell_demon_harvester_esp32c3_v2}"
 BUILD_DIR=$(find /tmp -name "${SKETCH_NAME}.ino.bin" -newer /tmp -printf '%h\n' 2>/dev/null | head -1)
 
 if [ -z "$BUILD_DIR" ]; then

@@ -8,7 +8,8 @@
  *     ./test/run_tests.sh --coverage
  *
  * Arduino IDE でスケッチをコンパイルする際は、このファイルを .ino と
- * 同じスケッチフォルダに置くこと。
+ * 同じスケッチフォルダに置くこと。Arduino はフォルダ内の全 .ino を連結して
+ * ビルドするため、そのフォルダには .ino を 1 つだけ入れること。
  */
 #pragma once
 
@@ -40,9 +41,9 @@ struct Config {
     float activePower_mW;    // 起床中の平均消費電力の推定値 (80MHz, USB CDC) [mW]
 
     // --- 起動時 USB ホスト待機 [ms] ---
-    uint32_t firstBootWaitMs;  // 初回起動: シリアルモニタを開く猶予
-    uint32_t hostSeenWaitMs;   // 前回ホスト検出済み: CDC 再列挙を待つ上限
-    uint32_t noHostProbeMs;    // 前回ホスト無し (自律運転中): 短いプローブのみ
+    uint32_t firstBootWaitMs;  // 電源投入直後の初回起動: シリアルモニタを開く猶予 (早期脱出なし)
+    uint32_t hostSeenWaitMs;   // 前回ホスト検出済み: CDC 再列挙〜モニタ再接続を待つ上限 (早期脱出あり)
+    uint32_t noHostProbeMs;    // 前回ホスト無し (自律運転中): バス活性を確認するプローブのみ
 
     // --- センサ ---
     uint32_t ds18b20ConversionMs;  // DS18B20 9-bit 変換時間 [ms]
@@ -67,8 +68,8 @@ constexpr Config DEFAULT_CONFIG = {
     66.0f,    // activePower_mW (20 mA × 3.3 V の推定値)
     // 起動時 USB 待機 [ms]
     3000,  // firstBootWaitMs
-    1500,  // hostSeenWaitMs
-    200,   // noHostProbeMs
+    3000,  // hostSeenWaitMs  (旧版の固定 3 秒と同等。ホスト接続で早期脱出)
+    300,   // noHostProbeMs
     // センサ
     94,    // ds18b20ConversionMs (9-bit: 93.75 ms)
 };
@@ -81,8 +82,11 @@ struct Decision {
     bool eco;  // true: 短縮パルスで発光 (微小温度差時)
 };
 
-inline Decision decideDemon(float vStore, float deltaT, const Config& c) {
+// temperatureValid: 今サイクルの温度読取が両プローブとも成功したか。
+// false の場合 deltaT は前回値 (RTC 残留) なので、決して発光しない。
+inline Decision decideDemon(float vStore, float deltaT, const Config& c, bool temperatureValid = true) {
     Decision d = {false, false};
+    if (!temperatureValid) return d;
     if (vStore < c.flashThresholdV || deltaT < c.minDeltaT) return d;
     d.act = true;
     d.eco = (deltaT < c.ecoDeltaT);
@@ -109,6 +113,9 @@ inline uint64_t clampSleepUs(uint64_t us, const Config& c) {
     return us;
 }
 
+// float→double 変換の表現誤差 (数十 μs 相当) を切り上げ判定で無視する許容値 [s]
+constexpr double SLEEP_ROUNDING_TOLERANCE_S = 1e-3;
+
 // 充電中の予測スリープ: 前回サイクルからの充電速度 dV/dt を使い、
 // 発光閾値に達するまでの時間だけ眠る (無駄な起床を排除する)。
 //   vNow        : 今回起床時の電圧
@@ -126,8 +133,12 @@ inline uint64_t predictChargeSleepUs(float vNow, float vPrev, uint64_t prevSleep
     const double needV = static_cast<double>(c.flashThresholdV) - static_cast<double>(vNow);
     const double secs = needV / ratePerSec;
 
-    uint64_t wholeSecs = static_cast<uint64_t>(secs);
-    if (static_cast<double>(wholeSecs) < secs) ++wholeSecs;  // 切り上げ
+    // 最長スリープ以上ならキャストせずクランプ (巨大値の uint64 変換は未定義動作)
+    const double maxSecs = static_cast<double>(c.sleepEmptyUs) / 1e6;
+    if (secs >= maxSecs) return c.sleepEmptyUs;
+
+    uint64_t wholeSecs = static_cast<uint64_t>(secs + SLEEP_ROUNDING_TOLERANCE_S);
+    if (static_cast<double>(wholeSecs) < secs - SLEEP_ROUNDING_TOLERANCE_S) ++wholeSecs;  // 切り上げ
     return clampSleepUs(wholeSecs * 1000000ULL, c);
 }
 
@@ -173,6 +184,7 @@ inline float activeCost_mJ(uint32_t awakeMs, const Config& c) {
 
 // =====================================================================
 //  SOS モールス発光のタイミング (・・・ ─── ・・・)
+//  パターンはここで一度だけ定義し、発光関数と所要時間計算の両方が参照する。
 // =====================================================================
 struct MorseTiming {
     unsigned dotMs;
@@ -184,16 +196,40 @@ inline MorseTiming morseTiming(bool ecoMode) {
     return ecoMode ? MorseTiming{60u, 180u, 60u} : MorseTiming{100u, 300u, 100u};
 }
 
-// LED 点灯時間の合計: 短点 6 回 + 長点 3 回
-inline unsigned morseOnTimeMs(bool ecoMode) {
-    const MorseTiming t = morseTiming(ecoMode);
-    return 6u * t.dotMs + 3u * t.dashMs;
+constexpr unsigned SOS_SYMBOL_COUNT   = 9;  // S(3) + O(3) + S(3)
+constexpr unsigned SOS_LETTER_SYMBOLS = 3;  // 1 文字あたりの符号数
+
+// 符号 i (0..8) が長点か: 中央の 3 つ (O) が長点
+inline bool sosSymbolIsDash(unsigned i) {
+    return i >= SOS_LETTER_SYMBOLS && i < 2 * SOS_LETTER_SYMBOLS;
 }
 
-// 発光シーケンス全体の所要時間: 点灯 + 各符号後ギャップ 9 回 + 文字間ギャップ 2×2 回
+// 符号 i の点灯時間
+inline unsigned sosSymbolOnMs(unsigned i, const MorseTiming& t) {
+    return sosSymbolIsDash(i) ? t.dashMs : t.dotMs;
+}
+
+// 符号 i の後の消灯時間: 通常 1 ギャップ、文字末 (最終文字を除く) は 3 ギャップ
+inline unsigned sosGapAfterMs(unsigned i, const MorseTiming& t) {
+    const bool letterEnd = (i % SOS_LETTER_SYMBOLS == SOS_LETTER_SYMBOLS - 1);
+    const bool lastSymbol = (i + 1 >= SOS_SYMBOL_COUNT);
+    return (letterEnd && !lastSymbol) ? 3u * t.gapMs : t.gapMs;
+}
+
+// LED 点灯時間の合計
+inline unsigned morseOnTimeMs(bool ecoMode) {
+    const MorseTiming t = morseTiming(ecoMode);
+    unsigned total = 0;
+    for (unsigned i = 0; i < SOS_SYMBOL_COUNT; ++i) total += sosSymbolOnMs(i, t);
+    return total;
+}
+
+// 発光シーケンス全体の所要時間 (点灯 + 消灯)
 inline unsigned morseTotalMs(bool ecoMode) {
     const MorseTiming t = morseTiming(ecoMode);
-    return morseOnTimeMs(ecoMode) + 13u * t.gapMs;
+    unsigned total = 0;
+    for (unsigned i = 0; i < SOS_SYMBOL_COUNT; ++i) total += sosSymbolOnMs(i, t) + sosGapAfterMs(i, t);
+    return total;
 }
 
 }  // namespace demon

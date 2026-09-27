@@ -24,10 +24,12 @@ inline void delay(uint32_t) {}
 inline uint32_t millis() { return 0; }
 inline bool setCpuFrequencyMhz(uint32_t) { return true; }
 
+// HWCDC-like serial: operator bool() reports whether the host has the CDC port open.
 struct SerialStub {
     void begin(unsigned long) {}
     void flush() {}
     void println() {}
+    explicit operator bool() const { return false; }
     template <class T> void print(const T&) {}
     template <class T> void print(const T&, int) {}
     template <class T> void println(const T&) {}
