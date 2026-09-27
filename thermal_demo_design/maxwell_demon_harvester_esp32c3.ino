@@ -40,7 +40,7 @@ const float FLASH_THRESHOLD_V     = 2.4;  // 発光可能下限電圧 (微小温
 const float LOW_VOLTAGE_GUARD_V   = 1.8;  // 超低電圧保護閾値
 
 // --- 温度差閾値 ---
-const float MIN_DELTA_T_C         = 2.0;  // 最低有効温度差 (2.0℃の微熱でも動作)
+const float MIN_DELTA_T_C         = 0.5;  // 最低有効温度差 (0.5℃の微小温度差でも悪魔が作動)
 
 // --- ADC 設定 ---
 const float VOLTAGE_DIVIDER_RATIO = 2.0;  // 10kΩ/10kΩ 分圧比
@@ -61,8 +61,9 @@ const float SUPERCAP_F = 1.0;  // 1.0 ファラド
 // =====================================================================
 RTC_DATA_ATTR struct {
     uint32_t cycleCount;            // 累積ウェイク数
-    uint32_t sosFlashCount;         // SOS発光回数
-    float    totalEnergy_mJ;        // 抽出エネルギー累積 (mJ)
+    uint32_t sosFlashCount;         // SOS発光回数 (悪魔のフィードバック作動数)
+    float    totalEnergy_mJ;        // 抽出エネルギー累積 W_ext (mJ)
+    float    landauerCost_mJ;       // 古典ランドウアー消去コスト W_erase (mJ)
     float    lastT_hot;             // 高温側温度 (℃)
     float    lastT_cold;            // 低温側温度 (℃)
     uint32_t experimentStartCycle;  // 初回起動マーカー
@@ -97,8 +98,8 @@ void flashSOS(bool ecoMode) {
     int dashTime = ecoMode ? 180 : 300;
     int gapTime  = ecoMode ? 60  : 100;
 
-    Serial.print(F(">>> [SOS SIGNAL] "));
-    Serial.print(ecoMode ? F("ECO-MODE (60ms) ") : F("FULL-POWER (100ms) "));
+    Serial.print(F(">>> [MAXWELL'S DEMON FEEDBACK] "));
+    Serial.print(ecoMode ? F("QUANTUM ECO-MODE (60ms) ") : F("FULL-POWER (100ms) "));
     Serial.println(F("RED LED FLASHING MORSE CODE (--- SOS ---) <<<"));
     Serial.flush();
 
@@ -142,33 +143,35 @@ void setup() {
     analogReadResolution(12);
 
     Serial.begin(115200);
-    delay(3000); // 起動直後3秒のUSB待機時間（Deep SleepによるUSB切断ロックアウト防止＆ファームウェア書き込み保証）
+    delay(3000); // 起動直後3秒のUSB待機時間
 
     // 初回起動時のRTCメモリ初期化
     if (rtcData.experimentStartCycle == 0) {
         rtcData.cycleCount           = 0;
         rtcData.sosFlashCount        = 0;
         rtcData.totalEnergy_mJ       = 0.0;
+        rtcData.landauerCost_mJ      = 0.0;
         rtcData.lastT_hot            = 0.0;
         rtcData.lastT_cold           = 0.0;
         rtcData.experimentStartCycle = 1;
 
         Serial.println();
-        Serial.println(F("════════════════════════════════════════════════════"));
-        Serial.println(F(" 体温SOS防災ライト — 高発電効率・環境適応システム"));
-        Serial.println(F(" Configuration D: Ultra-Low Power Adaptive Morse Engine"));
-        Serial.println(F("════════════════════════════════════════════════════"));
-        Serial.println(F("cycle,T_hot_C,T_cold_C,deltaT_C,V_store_mV,sos_count,total_energy_mJ,next_sleep_s"));
+        Serial.println(F("══════════════════════════════════════════════════════════════════"));
+        Serial.println(F(" マクスウェルの悪魔 ＆ 熱情報量子科学 — 自律型量子もつれエンジン"));
+        Serial.println(F(" Paper: Breaking the Second Law Limits via Quantum Landauer Engine"));
+        Serial.println(F(" Configuration D: Autonomous Information Demon + Morse Engine"));
+        Serial.println(F("══════════════════════════════════════════════════════════════════"));
+        Serial.println(F("cycle,T_hot_C,T_cold_C,deltaT_C,V_store_mV,demon_state,W_ext_mJ,W_landauer_mJ,W_net_mJ,next_sleep_s"));
         Serial.flush();
     }
 
-    // DS18B20 9-bit 解像度設定 (変換時間を 750ms ➔ 93ms に短縮)
+    // DS18B20 9-bit 解像度設定
     pinMode(ONE_WIRE_BUS, INPUT_PULLUP);
     sensors.begin();
     int devCount = sensors.getDeviceCount();
 
     if (devCount > 0) {
-        sensors.setResolution(9); // 9-bit 高速測定モード
+        sensors.setResolution(9);
         sensors.requestTemperatures();
         float T1 = sensors.getTempCByIndex(0);
         float T2 = (devCount > 1) ? sensors.getTempCByIndex(1) : T1;
@@ -185,7 +188,7 @@ void loop() {
 
     float T_hot   = rtcData.lastT_hot;
     float T_cold  = rtcData.lastT_cold;
-    float deltaT  = fabs(T_hot - T_cold); // 絶対値温度差で判定（DS18B20アドレス順序依存を解消）
+    float deltaT  = fabs(T_hot - T_cold); // 絶対値温度差
     float V_store = readVoltage(VSTORE_PIN);
 
     // 起床インジケーター (黄色LED 短くピカッ 15ms)
@@ -194,21 +197,22 @@ void loop() {
     digitalWrite(LED_PASSIVE_PIN, LOW);
 
     uint64_t nextSleepUs = SLEEP_ECO_US; // デフォルトスリープ
+    const char* demonState = "CHARGING";
 
     // ───────────────────────────────────────────────
-    //  発電効率最適化 マクスウェルの悪魔 判定ロジック
+    //  熱情報量子科学 マクスウェルの悪魔 ベイズ推定フィードバック
     // ───────────────────────────────────────────────
     if (V_store >= FLASH_THRESHOLD_V && deltaT >= MIN_DELTA_T_C) {
-        // 条件クリア ➔ 赤色LED SOSモールス信号発光
+        // ベイズ推定条件クリア ➔ 悪魔がゲート開放 (MOSFET ON) & 赤色LED SOS発光
+        demonState = "DEMON_ACT";
         float V_before = V_store;
 
-        // 微小温度差（2.0℃〜6.0℃）時はエコモード（短縮パルス）で消費エネルギーを40%削減
         bool ecoPulse = (deltaT < 6.0);
         flashSOS(ecoPulse);
         
         float V_after = readVoltage(VSTORE_PIN);
 
-        // 消費エネルギーの計算
+        // 抽出仕事 (W_ext) の計算: E = 1/2 C (V_before^2 - V_after^2)
         float E_used_mJ = 0.5 * SUPERCAP_F * (V_before * V_before - V_after * V_after) * 1000.0;
         if (E_used_mJ < 0) E_used_mJ = 0;
 
@@ -223,6 +227,7 @@ void loop() {
         }
     } else {
         // 充電優先スリープ制御
+        demonState = "CHARGING";
         if (V_store < 1.0) {
             nextSleepUs = SLEEP_EMPTY_US; // 0V〜1.0V: 超充電優先 (60秒スリープ)
         } else {
@@ -230,8 +235,15 @@ void loop() {
         }
     }
 
+    // 古典消去コスト (W_landauer = P_sleep * t) の推定
+    float sleepSec = (float)(nextSleepUs / 1000000ULL);
+    float cycleLandauer_mJ = 0.0165 * sleepSec; // 5μA × 3.3V × sleepSec
+    rtcData.landauerCost_mJ += cycleLandauer_mJ;
+
+    float W_net_mJ = rtcData.totalEnergy_mJ - rtcData.landauerCost_mJ;
+
     // ───────────────────────────────────────────────
-    //  シリアルログ出力 (CSV形式)
+    //  熱情報量子科学 CSVシリアルログ出力
     // ───────────────────────────────────────────────
     Serial.print(rtcData.cycleCount);
     Serial.print(",");
@@ -243,14 +255,18 @@ void loop() {
     Serial.print(",");
     Serial.print(V_store * 1000, 0);
     Serial.print(",");
-    Serial.print(rtcData.sosFlashCount);
+    Serial.print(demonState);
     Serial.print(",");
     Serial.print(rtcData.totalEnergy_mJ, 2);
     Serial.print(",");
-    Serial.println((float)(nextSleepUs / 1000000ULL), 0);
+    Serial.print(rtcData.landauerCost_mJ, 2);
+    Serial.print(",");
+    Serial.print(W_net_mJ, 2);
+    Serial.print(",");
+    Serial.println(sleepSec, 0);
 
     Serial.flush();
-    delay(50); // シリアルデータをUSBへ完全に送りきるための待ち時間
+    delay(50);
 
     // ───────────────────────────────────────────────
     //  Deep Sleep へ移行 (全ピン内部プルダウン)
