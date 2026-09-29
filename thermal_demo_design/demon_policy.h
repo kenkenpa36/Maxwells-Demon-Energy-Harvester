@@ -58,7 +58,7 @@ constexpr Config DEFAULT_CONFIG = {
     3.0f,   // stdDeltaT
     8.0f,   // fastDeltaT
     // スリープ [μs]
-    12000000ULL,  // sleepFastUs  (12 s)
+    10000000ULL,  // sleepFastUs  (10 s)
     25000000ULL,  // sleepEcoUs   (25 s)
     45000000ULL,  // sleepGuardUs (45 s)
     60000000ULL,  // sleepEmptyUs (60 s)
@@ -97,14 +97,15 @@ inline Decision decideDemon(float vStore, float deltaT, const Config& c, bool te
 //  スリープ時間の決定
 // =====================================================================
 
-// 静的ルール: 発光した場合は温度差で、充電中は残電圧で決める。
+// 静的ルール: 発光した場合は一律 sleepFastUs、充電中は残電圧で決める。
 inline uint64_t selectSleepUs(bool acted, float vStore, float deltaT, const Config& c) {
     if (!acted) {
         return (vStore < c.emptyV) ? c.sleepEmptyUs : c.sleepGuardUs;
     }
-    if (deltaT >= c.fastDeltaT) return c.sleepFastUs;
-    if (deltaT >= c.stdDeltaT)  return c.sleepEcoUs;
-    return c.sleepGuardUs;
+    // 発光後は一律 sleepFastUs (10 s) で再起床。エネルギー不足なら
+    // 次サイクルの decideDemon が CHARGING に回すため過放電は起きない。
+    (void)deltaT;  // 未使用警告を抑制
+    return c.sleepFastUs;
 }
 
 inline uint64_t clampSleepUs(uint64_t us, const Config& c) {

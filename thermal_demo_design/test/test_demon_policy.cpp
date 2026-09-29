@@ -99,15 +99,13 @@ TEST(after_flash_high_delta_t_sleeps_fast) {
     CHECK(selectSleepUs(true, 3.0f, 8.0f, cfg) == cfg.sleepFastUs);
 }
 
-TEST(after_flash_standard_delta_t_sleeps_eco) {
-    CHECK(selectSleepUs(true, 3.0f, 3.0f, cfg) == cfg.sleepEcoUs);
-    CHECK(selectSleepUs(true, 3.0f, 7.9f, cfg) == cfg.sleepEcoUs);
-}
-
-TEST(after_flash_tiny_delta_t_sleeps_guard_to_recharge) {
-    // Previously 25 s. A 0.5–3 ℃ gradient recharges slowly, so the demon
-    // should stay asleep longer instead of waking into an empty capacitor.
-    CHECK(selectSleepUs(true, 3.0f, 2.9f, cfg) == cfg.sleepGuardUs);
+TEST(after_flash_always_sleeps_fast_regardless_of_delta_t) {
+    // 発光後は ΔT によらず一律 sleepFastUs (10 s)。エネルギー不足なら
+    // 次サイクルの decideDemon が CHARGING に回すため過放電は起きない。
+    CHECK(selectSleepUs(true, 3.0f, 3.0f, cfg) == cfg.sleepFastUs);
+    CHECK(selectSleepUs(true, 3.0f, 7.9f, cfg) == cfg.sleepFastUs);
+    CHECK(selectSleepUs(true, 3.0f, 2.9f, cfg) == cfg.sleepFastUs);
+    CHECK(selectSleepUs(true, 3.0f, 0.5f, cfg) == cfg.sleepFastUs);
 }
 
 TEST(charging_with_empty_capacitor_sleeps_longest) {

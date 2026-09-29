@@ -367,6 +367,16 @@ void loop() {
     } else {
         demonState = tempValid ? "CHARGING" : "SENSOR_ERR";
         nextSleepUs = demon::predictChargeSleepUs(V_store, rtcData.lastV_store, rtcData.lastSleepUs, CFG);
+
+        // SENSOR_ERR 視覚警告: 黄色LED 3回高速点滅 (通常の1回15msと明確に区別)
+        if (!tempValid) {
+            for (int i = 0; i < 3; i++) {
+                digitalWrite(LED_PASSIVE_PIN, HIGH);
+                delay(100);
+                digitalWrite(LED_PASSIVE_PIN, LOW);
+                delay(100);
+            }
+        }
     }
 
     // ───────────────────────────────────────────────
