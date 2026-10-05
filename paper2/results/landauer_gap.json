@@ -1,0 +1,10 @@
+{
+  "Landauer_J": 2.870978885078724e-21,
+  "SFQ_J": 1e-19,
+  "CMOS_gate_J": 1e-16,
+  "ESP32_v2_wake_10ms_J": 0.00066,
+  "ESP32_v1_wake_3s_J": 0.2,
+  "ratio_ESP32_v2_to_Landauer": 2.298867481855069e+17,
+  "ratio_ESP32_v1_to_Landauer": 6.966265096530513e+19,
+  "ratio_v1_to_v2_waste": 303.03030303030306
+}
