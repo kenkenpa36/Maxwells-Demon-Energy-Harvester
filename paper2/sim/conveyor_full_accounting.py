@@ -1,23 +1,35 @@
 """
 conveyor_full_accounting.py
 ===========================
-10 ドットチェーン (Information Conveyor Belt) の完全な熱力学収支。
+10 ドットチェーン「情報ベルトコンベア」の完全な熱力学収支 (改訂版)。
 
-10 ドットの連続位置測定 (測定強度 k_meas) とベイズ制御のフィードバック下で、
-逆バイアス Δμ = 2.0 kT に対抗して電子を汲み上げる。
+模型 (旧 simulate_macroscopic_quantum_engine.py と同一パラメータ)
+  - 状態: |0> = 空, |j> = 電子がドット j (j=1..10) にいる。次元 11
+  - 連続位置測定: L = sqrt(k_meas) * X,  X = sum_j (j/10)|j><j|,  k_meas = 100
+  - ベイズ (事後状態) に基づくゲート制御: 空なら入口を開け、電子位置 argmax の前方障壁を開ける
+  - 逆バイアス Δμ = μR - μL = 2 kT に逆らって電子を右浴へ送り出す -> 抽出仕事 W_ext
+  - 室温 T を kT = 1 とする
 
-正当な熱力学収支の評価:
- (1) 抽出仕事 W_ext: 逆バイアスを超えて右熱浴に排出された粒子による仕事
- (2) 獲得情報量 I_acc: 事後確率分布の分散から算出した相互情報量累積 (nats)
- (3) メモリ消去コスト W_erase(T_M) = k_B T_M * I_acc
-     - 等温設定 (T_M = T = 300 K): W_net = W_ext - W_erase(T) < 0 (第二法則と整合)
-     - 極低温悪魔設定 (T_M = 4.2 K, T = 300 K): W_erase が 4.2/300 ≈ 1.4% に激減し W_net > 0
- (4) 損益分岐温度: T_M_break = T * (W_ext / (k_B T * I_acc))
+旧版からの変更点
+  1. 確率マスター方程式 (SME) の積分を、正値性を保存する Rouchon-Ralph 型の
+     Kraus 写像に置き換えた (旧版の陽的オイラー法 + クリップは状態が破綻しうる)
+  2. 単一の乱数系列ではなく N_SEEDS 本の測定記録について平均と標準誤差を求める
+  3. 刻み幅 dt を半分にした計算と比較して収束を確認する
+  4. 獲得情報量 I_acc は Duncan (1970) の公式で計算する:
+        測定記録 dy = h dt + dW, h = <L + L^†> = 2 sqrt(k) X に対し
+        dI/dt = (1/2) E[(h - ĥ)^2] = 2 k Var_post(X)   [nats/時間]
+     (測定で位相緩和が速く、占有数を古典的な隠れ状態とみなす近似)
+  5. 収支を3通りで評価する
+     (a) 等温 (メモリも室温 T):            W_net = W_ext - kT * I
+     (b) 低温メモリ T_M (自然の低温浴がある場合): W_net = W_ext - k T_M * I
+     (c) 低温メモリを室温から冷凍機で維持する場合:
+         メモリに捨てた熱 Q_M = k T_M I を T まで汲み上げるのに W_fr >= Q_M (T/T_M - 1)
+         -> W_net = W_ext - k T_M I - W_fr <= W_ext - kT I  (= (a) と同じ)
 """
 import os
 import json
 import numpy as np
-import qutip as qt
+from multiprocessing import Pool
 import plotstyle  # noqa: F401
 import matplotlib.pyplot as plt
 
@@ -29,161 +41,161 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 N_DOTS = 10
 DIM = N_DOTS + 1
-KT_ROOM = 1.0  # 室温 (300 K) を 1.0 とする
+KT = 1.0
 T_ROOM_K = 300.0
-T_HE_K = 4.2
+K_MEAS = 100.0
+MU_L, MU_R, EPS = 0.0, 2.0, 0.0
+KAPPA_ON, KAPPA_OFF = 20.0, 0.01
+T_FINAL = 6.0           # 旧版と同じ総時間 (dt=0.002 x 3000 step)
+N_SEEDS = 48
 
-proj = lambda i: qt.basis(DIM, i) * qt.basis(DIM, i).dag()
-jump = lambda i, j: qt.basis(DIM, i) * qt.basis(DIM, j).dag()
-
-LM_OP = sum((j / N_DOTS) * proj(j) for j in range(1, N_DOTS + 1))
-
-
-def fD(E, mu, kT):
-    exp_val = np.clip((E - mu) / kT, -100, 100)
-    return 1.0 / (np.exp(exp_val) + 1.0)
+X_DIAG = np.array([0.0] + [j / N_DOTS for j in range(1, DIM)])
+L_OP = np.sqrt(K_MEAS) * np.diag(X_DIAG)
+I_DIM = np.eye(DIM)
 
 
-def run_conveyor_sim(k_meas=100.0, muR=2.0, dt=0.002, n_steps=2000, seed=42):
-    np.random.seed(seed)
-    Lm = np.sqrt(k_meas) * LM_OP
-    rho = proj(0)
+def ket_bra(i, j):
+    m = np.zeros((DIM, DIM))
+    m[i, j] = 1.0
+    return m
 
+
+def fD(E, mu):
+    return 1.0 / (np.exp(np.clip((E - mu) / KT, -100, 100)) + 1.0)
+
+
+F_L, F_R = fD(EPS, MU_L), fD(EPS, MU_R)
+HOP = [None] + [ket_bra(j, j + 1) + ket_bra(j + 1, j) for j in range(1, N_DOTS)]
+J_L_IN, J_L_OUT = ket_bra(1, 0), ket_bra(0, 1)
+J_R_IN, J_R_OUT = ket_bra(N_DOTS, 0), ket_bra(0, N_DOTS)
+
+
+def run(args):
+    seed, dt = args
+    rng = np.random.default_rng(seed)
+    n_steps = int(round(T_FINAL / dt))
+    rho = np.zeros((DIM, DIM), dtype=complex)
+    rho[0, 0] = 1.0
     w_ext = 0.0
     i_acc = 0.0
+    w_hist = np.empty(n_steps)
+    i_hist = np.empty(n_steps)
+    for n in range(n_steps):
+        P = np.real(np.diag(rho)).clip(0.0)
+        P /= P.sum()
+        # 情報獲得率 (Duncan): 2 k Var_post(X)
+        mx = float(X_DIAG @ P)
+        var_x = float((X_DIAG ** 2) @ P - mx ** 2)
+        i_acc += 2.0 * K_MEAS * max(var_x, 0.0) * dt
 
-    w_ext_list = []
-    i_acc_list = []
-
-    kappa_ON = 20.0
-    kappa_OFF = 0.01
-    muL = 0.0
-    eps = 0.0
-
-    for _step in range(n_steps):
-        P = np.clip(np.real(rho.diag()), 0.0, 1.0)
-        p_sum = float(np.sum(P))
-        if p_sum > 1e-12:
-            P = P / p_sum
-
-        exp_Lm = sum(np.sqrt(k_meas) * (j / N_DOTS) * P[j] for j in range(1, N_DOTS + 1))
-        exp_Lm2 = sum(k_meas * ((j / N_DOTS) ** 2) * P[j] for j in range(1, N_DOTS + 1))
-        var_Lm = max(0.0, exp_Lm2 - exp_Lm**2)
-
-        info_rate = 2.0 * var_Lm
-        i_acc += info_rate * dt
-
-        g_rates = np.zeros(N_DOTS + 1)
-        kappaL = kappa_OFF
-        kappaR = kappa_OFF
-
+        # ベイズ制御 (旧版と同じ規則)
+        H = np.zeros((DIM, DIM))
+        kL = kR = KAPPA_OFF
         if P[0] > 0.5:
-            kappaL = kappa_ON
+            kL = KAPPA_ON
         else:
             x = int(np.argmax(P[1:]) + 1)
             if x < N_DOTS:
-                g_rates[x] = kappa_ON
+                H = KAPPA_ON * HOP[x]
             else:
-                kappaR = kappa_ON
+                kR = KAPPA_ON
+        c_ops = [np.sqrt(kL * F_L) * J_L_IN, np.sqrt(kL * (1 - F_L)) * J_L_OUT,
+                 np.sqrt(kR * F_R) * J_R_IN, np.sqrt(kR * (1 - F_R)) * J_R_OUT]
 
-        H0 = qt.Qobj(np.zeros((DIM, DIM)))
-        for j in range(1, N_DOTS):
-            H0 += g_rates[j] * (jump(j, j + 1) + jump(j + 1, j))
+        # 抽出仕事: 右浴へ送り出された粒子 x Δμ
+        I_R_out = kR * (1 - F_R) * P[N_DOTS] - kR * F_R * P[0]
+        w_ext += (MU_R - MU_L) * I_R_out * dt
+        w_hist[n] = w_ext
+        i_hist[n] = i_acc
 
-        G_L_in = kappaL * fD(eps, muL, KT_ROOM)
-        G_L_out = kappaL * (1.0 - fD(eps, muL, KT_ROOM))
-        G_R_in = kappaR * fD(eps, muR, KT_ROOM)
-        G_R_out = kappaR * (1.0 - fD(eps, muR, KT_ROOM))
-
-        c_ops = [
-            np.sqrt(G_L_in) * jump(1, 0),
-            np.sqrt(G_L_out) * jump(0, 1),
-            np.sqrt(G_R_in) * jump(N_DOTS, 0),
-            np.sqrt(G_R_out) * jump(0, N_DOTS),
-        ]
-
-        I_R_out = G_R_out * P[N_DOTS] - G_R_in * P[0]
-        W_dot = (muR - muL) * I_R_out
-        w_ext += W_dot * dt
-
-        w_ext_list.append(w_ext)
-        i_acc_list.append(i_acc)
-
-        L_rho = -1j * (H0 * rho - rho * H0)
+        # 正値性を保存する Kraus 写像 (Rouchon & Ralph 型)
+        dW = rng.normal(0.0, np.sqrt(dt))
+        dy = 2.0 * np.real(np.trace(L_OP @ rho)) * dt + dW
+        Kc = sum(c.T @ c for c in c_ops)
+        M = (I_DIM - (1j * H + 0.5 * Kc + 0.5 * L_OP @ L_OP) * dt
+             + L_OP * dy + 0.5 * (L_OP @ L_OP) * (dy * dy - dt))
+        rho_new = M @ rho @ M.conj().T
         for c in c_ops:
-            L_rho += c * rho * c.dag() - 0.5 * (c.dag() * c * rho + rho * c.dag() * c)
+            rho_new += c @ rho @ c.T * dt
+        rho_new = 0.5 * (rho_new + rho_new.conj().T)
+        rho = rho_new / np.real(np.trace(rho_new))
+    min_eig = float(np.linalg.eigvalsh(rho).min())
+    return w_hist, i_hist, min_eig
 
-        L_rho += Lm * rho * Lm.dag() - 0.5 * (Lm.dag() * Lm * rho + rho * Lm.dag() * Lm)
-        dW = np.random.normal(0, np.sqrt(dt))
-        innov = Lm * rho + rho * Lm.dag() - qt.expect(Lm + Lm.dag(), rho) * rho
 
-        rho_new = rho + L_rho * dt + innov * dW
-        rho_new = (rho_new + rho_new.dag()) * 0.5
-        tr_val = float(np.real(rho_new.tr()))
-        if tr_val > 1e-12:
-            rho = rho_new / tr_val
-        else:
-            rho = rho_new
-
-    return np.array(w_ext_list), np.array(i_acc_list)
+def stats(x):
+    x = np.asarray(x)
+    return float(x.mean()), float(x.std(ddof=1) / np.sqrt(len(x)))
 
 
 def main():
-    w_ext, i_acc = run_conveyor_sim()
+    dt0 = 0.002
+    with Pool(min(8, os.cpu_count() or 1)) as pool:
+        res0 = pool.map(run, [(s, dt0) for s in range(N_SEEDS)])
+        res1 = pool.map(run, [(s, dt0 / 2) for s in range(N_SEEDS)])
 
-    t_m_k = np.linspace(0.1, 350.0, 200)
-    w_erase_vs_T = (t_m_k / T_ROOM_K) * i_acc[-1]
-    w_net_vs_T = w_ext[-1] - w_erase_vs_T
+    W0 = np.array([r[0][-1] for r in res0]); I0 = np.array([r[1][-1] for r in res0])
+    W1 = np.array([r[0][-1] for r in res1]); I1 = np.array([r[1][-1] for r in res1])
+    min_eig = min(min(r[2] for r in res0), min(r[2] for r in res1))
 
-    t_break_k = T_ROOM_K * (w_ext[-1] / i_acc[-1])
-
-    w_erase_room = i_acc[-1]
-    w_erase_he = (T_HE_K / T_ROOM_K) * i_acc[-1]
-    w_net_room = w_ext[-1] - w_erase_room
-    w_net_he = w_ext[-1] - w_erase_he
-
-    res = {
-        "W_ext_final": float(w_ext[-1]),
-        "I_acc_nats": float(i_acc[-1]),
-        "W_erase_room_300K": float(w_erase_room),
-        "W_net_room_300K": float(w_net_room),
-        "W_erase_cryo_4K": float(w_erase_he),
-        "W_net_cryo_4K": float(w_net_he),
-        "T_M_break_even_K": float(t_break_k),
+    w_m, w_se = stats(W0)
+    i_m, i_se = stats(I0)
+    net_iso_m, net_iso_se = stats(W0 - KT * I0)
+    tm_break = T_ROOM_K * w_m / i_m
+    out = {
+        "n_seeds": N_SEEDS, "dt": dt0, "T_final": T_FINAL,
+        "W_ext_mean": w_m, "W_ext_se": w_se,
+        "I_acc_mean_nats": i_m, "I_acc_se": i_se,
+        "W_net_isothermal_mean": net_iso_m, "W_net_isothermal_se": net_iso_se,
+        "fraction_seeds_W_ext_gt_kT_I": float(np.mean(W0 > KT * I0)),
+        "W_net_cold_4p2K_mean": float(np.mean(W0 - (4.2 / T_ROOM_K) * I0)),
+        "W_net_cold_77K_mean": float(np.mean(W0 - (77.0 / T_ROOM_K) * I0)),
+        "W_net_cold_with_refrigerator_mean": net_iso_m,
+        "T_M_break_even_K": tm_break,
+        "convergence_dt_half": {"W_ext_mean": stats(W1)[0], "W_ext_se": stats(W1)[1],
+                                "I_acc_mean": stats(I1)[0], "I_acc_se": stats(I1)[1]},
+        "min_eigenvalue_final_rho": min_eig,
+        "legacy_single_run_reported": {"W_ext": 5.05, "I_acc": 26.96,
+                                       "note": "旧版: 陽的オイラー法・単一乱数系列"},
     }
-
     with open(os.path.join(OUT_DIR, "conveyor_thermo.json"), "w") as f:
-        json.dump(res, f, indent=2)
+        json.dump(out, f, indent=2, ensure_ascii=False)
 
+    # --- 図 ---
+    t = np.arange(len(res0[0][0])) * dt0
+    Wm = np.mean([r[0] for r in res0], axis=0)
+    Im = np.mean([r[1] for r in res0], axis=0)
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-
-    t_axis = np.arange(len(w_ext)) * 0.002
     ax = axes[0]
-    ax.plot(t_axis, w_ext, "k--", lw=2, label="抽出仕事 $W_{\\mathrm{ext}}$")
-    ax.plot(t_axis, w_ext - i_acc, color="#c0392b", lw=2, label="等温悪魔 ($T_M=300\\text{ K}$) 正味仕事")
-    ax.plot(t_axis, w_ext - (T_HE_K / T_ROOM_K) * i_acc, color="#27ae60", lw=2, label="極低温悪魔 ($T_M=4.2\\text{ K}$) 正味仕事")
+    ax.plot(t, Wm, "k--", lw=2, label="抽出仕事 $W_{\\rm ext}$")
+    ax.plot(t, Wm - KT * Im, color="#c0392b", lw=2,
+            label="(a) 等温メモリ / (c) 冷凍機で維持した低温メモリ")
+    ax.plot(t, Wm - (4.2 / T_ROOM_K) * Im, color="#27ae60", lw=2,
+            label="(b) 自然の低温浴 4.2 K にメモリ")
     ax.axhline(0, color="gray", lw=0.8)
-    ax.set_xlabel("時間 [$1/\\gamma_0$ 単位系]")
-    ax.set_ylabel("エネルギー [$k_B T_{\\mathrm{room}}$]")
-    ax.set_title("(a) 時間発展と消去コスト")
-    ax.legend(fontsize=8, loc="upper left")
+    ax.set_xlabel("時間 [任意単位]")
+    ax.set_ylabel("エネルギー [$k_BT$]")
+    ax.set_title(f"(a) {N_SEEDS} 本の測定記録の平均")
+    ax.legend(fontsize=7.5, loc="lower left")
 
     ax = axes[1]
-    ax.plot(t_m_k, w_net_vs_T, color="#2980b9", lw=2)
+    tm = np.linspace(0.5, 320, 300)
+    net_b = w_m - (tm / T_ROOM_K) * i_m
+    ax.plot(tm, net_b, color="#27ae60", lw=2, label="(b) 自然の低温浴を利用")
+    ax.fill_between(tm, net_b - np.sqrt(w_se**2 + (tm / T_ROOM_K * i_se) ** 2),
+                    net_b + np.sqrt(w_se**2 + (tm / T_ROOM_K * i_se) ** 2),
+                    color="#27ae60", alpha=0.2)
+    ax.axhline(net_iso_m, color="#c0392b", lw=2, label="(c) 冷凍機で低温を維持（$T_M$ に依らない）")
     ax.axhline(0, color="k", lw=0.8)
-    ax.axvline(t_break_k, color="#e67e22", ls="--", label=f"損益分岐温度 $T_{{M,\\mathrm{{break}}}} = {t_break_k:.1f}\\text{{ K}}$")
-    ax.axvline(T_HE_K, color="#27ae60", ls=":", label="液体ヘリウム (4.2 K)")
-    ax.axvline(T_ROOM_K, color="#c0392b", ls=":", label="室温 (300 K)")
-    ax.set_xlabel("悪魔 (メモリ消去) の動作温度 $T_M$ [K]")
-    ax.set_ylabel("正味仕事 $W_{\\mathrm{net}}$ [$k_B T_{\\mathrm{room}}$]")
-    ax.set_title("(b) メモリ温度に対する正味仕事と損益分岐点")
-    ax.legend(fontsize=8)
-
+    ax.axvline(tm_break, color="#e67e22", ls="--", label=f"損益分岐 $T_M$ = {tm_break:.0f} K")
+    ax.set_xlabel("メモリ（悪魔）の温度 $T_M$ [K]（作業物質は 300 K）")
+    ax.set_ylabel("正味仕事 $W_{\\rm net}$ [$k_BT$]")
+    ax.set_title("(b) 低温浴は「ただ」ではない")
+    ax.legend(fontsize=7.5, loc="lower left")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG_DIR, "fig_conveyor_thermo.pdf"))
     fig.savefig(os.path.join(FIG_DIR, "fig_conveyor_thermo.png"), dpi=200)
-
-    print(json.dumps(res, indent=2))
+    print(json.dumps(out, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

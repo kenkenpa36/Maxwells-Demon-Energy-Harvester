@@ -1,10 +1,19 @@
 {
-  "Landauer_J": 2.870978885078724e-21,
-  "SFQ_J": 1e-19,
+  "Landauer_theoretical_J": 2.870978885078724e-21,
+  "Berut_colloid_experiment_J": 3.0145278293326603e-21,
+  "SFQ_gate_J": 1e-19,
   "CMOS_gate_J": 1e-16,
-  "ESP32_v2_wake_10ms_J": 0.00066,
-  "ESP32_v1_wake_3s_J": 0.2,
-  "ratio_ESP32_v2_to_Landauer": 2.298867481855069e+17,
-  "ratio_ESP32_v1_to_Landauer": 6.966265096530513e+19,
-  "ratio_v1_to_v2_waste": 303.03030303030306
+  "ESP32_v2_wake_365ms_J": 0.02409,
+  "ESP32_v1_wake_3159ms_J": 0.20849399999999998,
+  "ratio_ESP32_v2_to_Landauer": 8.390866308771002e+18,
+  "ratio_ESP32_v1_to_Landauer": 7.262122375180163e+19,
+  "reduction_ratio_v1_to_v2": 8.654794520547945,
+  "design_budget_10s_cycle_mJ": {
+    "TEG_charge_10mW_10s": 100.0,
+    "Deep_sleep_10s": -0.165,
+    "v2_wake_control": -24.09,
+    "SOS_flash_100ms": -9.9,
+    "net_surplus_v2": 65.84499999999998,
+    "net_surplus_v1": -118.55899999999998
+  }
 }

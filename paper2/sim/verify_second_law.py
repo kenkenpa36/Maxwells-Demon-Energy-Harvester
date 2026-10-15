@@ -136,15 +136,24 @@ def main():
     fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
     x = [r["TD_over_T"] for r in rows]
     ax = axes[0]
-    ax.semilogx(x, [r["W_dot"] for r in rows], "o-", color="#e67e22", ms=3, label="出力 $\\dot W$")
-    ax.semilogx(x, [r["sigma"] * T for r in rows], "s--", color="#27ae60", ms=3,
-                label="$T\\,\\dot\\sigma$ (エントロピー生成)")
+    ax2 = ax.twinx()
+
+    l1 = ax.semilogx(x, [r["W_dot"] for r in rows], "o-", color="#e67e22", ms=4, lw=1.8, label=r"出力 $\dot{W}$ (左軸)")
+    l2 = ax2.semilogx(x, [r["sigma"] * T for r in rows], "s--", color="#27ae60", ms=3.5, lw=1.2,
+                      label=r"$T\,\dot\sigma$ (エントロピー生成・右軸)")
     ax.axhline(0, color="k", lw=0.8)
     ax.axvline(1.0, color="gray", ls=":", lw=1)
     ax.set_xlabel("悪魔の熱浴温度 $T_D/T$")
-    ax.set_ylabel("仕事率・散逸率 [任意単位]")
-    ax.set_title("(a) 出力は $T_D \\to T$ で消える")
-    ax.legend(fontsize=8)
+    ax.set_ylabel(r"仕事率 $\dot{W}$ [任意単位]", color="#e67e22")
+    ax2.set_ylabel(r"散逸率 $T\,\dot\sigma$ [任意単位]", color="#27ae60")
+    ax.tick_params(axis='y', labelcolor="#e67e22")
+    ax2.tick_params(axis='y', labelcolor="#27ae60")
+    ax.set_title(r"(a) 出力は $T_D \to T$ で消滅 ($\dot{W} \leq 0$)")
+    
+    # 凡例をまとめる
+    lines = l1 + l2
+    labels = [l.get_label() for l in lines]
+    ax.legend(lines, labels, fontsize=8, loc="center left")
 
     ax = axes[1]
     ok = [r for r in rows if not np.isnan(r["eta"])]

@@ -1,9 +1,28 @@
 {
-  "W_ext_final": 2.6066314047927777,
-  "I_acc_nats": 10.53001811548015,
-  "W_erase_room_300K": 10.53001811548015,
-  "W_net_room_300K": -7.923386710687373,
-  "W_erase_cryo_4K": 0.1474202536167221,
-  "W_net_cryo_4K": 2.4592111511760555,
-  "T_M_break_even_K": 74.26287522603906
+  "n_seeds": 48,
+  "dt": 0.002,
+  "T_final": 6.0,
+  "W_ext_mean": 3.3379008433804658,
+  "W_ext_se": 0.23843601889190702,
+  "I_acc_mean_nats": 21.283236630748082,
+  "I_acc_se": 0.4554824723239722,
+  "W_net_isothermal_mean": -17.945335787367615,
+  "W_net_isothermal_se": 0.3741981447152611,
+  "fraction_seeds_W_ext_gt_kT_I": 0.0,
+  "W_net_cold_4p2K_mean": 3.039935530549993,
+  "W_net_cold_77K_mean": -2.124796558511542,
+  "W_net_cold_with_refrigerator_mean": -17.945335787367615,
+  "T_M_break_even_K": 47.04971665669738,
+  "convergence_dt_half": {
+    "W_ext_mean": 4.02663044800894,
+    "W_ext_se": 0.29884208282308755,
+    "I_acc_mean": 21.908633652582793,
+    "I_acc_se": 0.4126750274121039
+  },
+  "min_eigenvalue_final_rho": -1.0068092476591377e-15,
+  "legacy_single_run_reported": {
+    "W_ext": 5.05,
+    "I_acc": 26.96,
+    "note": "旧版: 陽的オイラー法・単一乱数系列"
+  }
 }
