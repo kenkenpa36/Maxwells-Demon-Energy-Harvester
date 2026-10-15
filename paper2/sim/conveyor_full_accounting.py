@@ -161,36 +161,36 @@ def main():
     with open(os.path.join(OUT_DIR, "conveyor_thermo.json"), "w") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
 
-    # --- 図 ---
+    # --- Plot ---
     t = np.arange(len(res0[0][0])) * dt0
     Wm = np.mean([r[0] for r in res0], axis=0)
     Im = np.mean([r[1] for r in res0], axis=0)
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     ax = axes[0]
-    ax.plot(t, Wm, "k--", lw=2, label="抽出仕事 $W_{\\rm ext}$")
+    ax.plot(t, Wm, "k--", lw=2, label=r"Extracted Work $W_{\rm ext}$")
     ax.plot(t, Wm - KT * Im, color="#c0392b", lw=2,
-            label="(a) 等温メモリ / (c) 冷凍機で維持した低温メモリ")
+            label=r"(a) Isothermal / (c) Active Cryocooling")
     ax.plot(t, Wm - (4.2 / T_ROOM_K) * Im, color="#27ae60", lw=2,
-            label="(b) 自然の低温浴 4.2 K にメモリ")
+            label=r"(b) Passive Cold Reservoir (4.2 K)")
     ax.axhline(0, color="gray", lw=0.8)
-    ax.set_xlabel("時間 [任意単位]")
-    ax.set_ylabel("エネルギー [$k_BT$]")
-    ax.set_title(f"(a) {N_SEEDS} 本の測定記録の平均")
+    ax.set_xlabel("Time [dimensionless]")
+    ax.set_ylabel(r"Energy [$k_BT$]")
+    ax.set_title(f"(a) Mean of {N_SEEDS} Stochastic Trajectories")
     ax.legend(fontsize=7.5, loc="lower left")
 
     ax = axes[1]
     tm = np.linspace(0.5, 320, 300)
     net_b = w_m - (tm / T_ROOM_K) * i_m
-    ax.plot(tm, net_b, color="#27ae60", lw=2, label="(b) 自然の低温浴を利用")
+    ax.plot(tm, net_b, color="#27ae60", lw=2, label="(b) Passive Cold Reservoir")
     ax.fill_between(tm, net_b - np.sqrt(w_se**2 + (tm / T_ROOM_K * i_se) ** 2),
                     net_b + np.sqrt(w_se**2 + (tm / T_ROOM_K * i_se) ** 2),
                     color="#27ae60", alpha=0.2)
-    ax.axhline(net_iso_m, color="#c0392b", lw=2, label="(c) 冷凍機で低温を維持（$T_M$ に依らない）")
+    ax.axhline(net_iso_m, color="#c0392b", lw=2, label=r"(c) Active Carnot Refrigeration (Any $T_M$)")
     ax.axhline(0, color="k", lw=0.8)
-    ax.axvline(tm_break, color="#e67e22", ls="--", label=f"損益分岐 $T_M$ = {tm_break:.0f} K")
-    ax.set_xlabel("メモリ（悪魔）の温度 $T_M$ [K]（作業物質は 300 K）")
-    ax.set_ylabel("正味仕事 $W_{\\rm net}$ [$k_BT$]")
-    ax.set_title("(b) 低温浴は「ただ」ではない")
+    ax.axvline(tm_break, color="#e67e22", ls="--", label=f"Break-even $T_M$ = {tm_break:.0f} K")
+    ax.set_xlabel(r"Demon Memory Temperature $T_M$ [K] (Working Substance: 300 K)")
+    ax.set_ylabel(r"Net Cyclic Work $W_{\rm net}$ [$k_BT$]")
+    ax.set_title("(b) Refrigerator Tax: Active Cooling Is Not Free")
     ax.legend(fontsize=7.5, loc="lower left")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG_DIR, "fig_conveyor_thermo.pdf"))

@@ -179,28 +179,28 @@ def main():
     with open(os.path.join(OUT_DIR, "hardware_log_summary.json"), "w") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    # 図: 設計モデル比較
+    # Plot: Design model comparison
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     cycles = [r["cycle"] for r in rows_v2]
 
     ax = axes[0]
     if rows_v1:
-        ax.plot(cycles, [r["W_active_mJ"] for r in rows_v1], "r^--", label="v1 (旧: 毎起床約3.2s待機)")
-    ax.plot(cycles, [r["W_active_mJ"] for r in rows_v2], "go-", label="v2 (改善ファーム: 約365ms待機)")
-    ax.set_xlabel("サイクル数")
-    ax.set_ylabel("悪魔の起床中消費 $W_{\\mathrm{active}}$ [mJ]")
-    ax.set_title("(a) 起床時待機電力の削減予測 (設計値)")
+        ax.plot(cycles, [r["W_active_mJ"] for r in rows_v1], "r^--", label="v1 (Unconditioned ~3.2s Wake)")
+    ax.plot(cycles, [r["W_active_mJ"] for r in rows_v2], "go-", label="v2 (Optimized ~365ms Wake)")
+    ax.set_xlabel("Cycle Number")
+    ax.set_ylabel(r"Demon Wake Energy $W_{\mathrm{active}}$ [mJ]")
+    ax.set_title("(a) Wake-Time Energy Reduction (Design Model)")
     ax.legend(fontsize=8)
     ax.grid(True, ls=":", alpha=0.3)
 
     ax = axes[1]
     if rows_v1:
-        ax.plot(cycles, [r["W_net_total_mJ"] for r in rows_v1], "r^--", label="v1 正味収支 (赤字)")
-    ax.plot(cycles, [r["W_net_total_mJ"] for r in rows_v2], "bo-", label="v2 正味収支 (黒字化)")
+        ax.plot(cycles, [r["W_net_total_mJ"] for r in rows_v1], "r^--", label="v1 Net Balance (Deficit)")
+    ax.plot(cycles, [r["W_net_total_mJ"] for r in rows_v2], "bo-", label="v2 Net Balance (Surplus)")
     ax.axhline(0, color="k", lw=0.8)
-    ax.set_xlabel("サイクル数")
-    ax.set_ylabel("正味エネルギー収支 $W_{\\mathrm{net}}$ [mJ]")
-    ax.set_title("(b) 正味収支の改善予測 (設計仕様)")
+    ax.set_xlabel("Cycle Number")
+    ax.set_ylabel(r"Net Energy Surplus $W_{\mathrm{net}}$ [mJ]")
+    ax.set_title("(b) Energy Surplus Achievement (Design Model)")
     ax.legend(fontsize=8)
     ax.grid(True, ls=":", alpha=0.3)
 

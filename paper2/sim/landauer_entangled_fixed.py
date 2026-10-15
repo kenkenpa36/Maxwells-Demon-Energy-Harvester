@@ -181,30 +181,30 @@ def main():
     with open(os.path.join(OUT_DIR, "landauer_entangled.json"), "w") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
 
-    # --- 図 ---
+    # --- Plot ---
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     ax = axes[0]
-    labels = ["旧コード\n(熱浴反転)", "演算子修正後\n(同じオイラー法)", "理論限界\n$-k_BT\\ln 2$"]
+    labels = ["Legacy Code\n(Inverted Bath)", "Fixed Operators\n(Euler)", r"Theoretical Bound\n$-k_BT\ln 2$"]
     vals = [legacy_c3, fixed_c3, -LN2]
     colors = ["#c0392b", "#2980b9", "#7f8c8d"]
     ax.bar(labels, vals, color=colors)
     for i, v in enumerate(vals):
         ax.text(i, v - 0.8 if v < -2 else v - 0.15, f"{v:.2f}", ha="center", va="top", fontsize=10)
     ax.axhline(0, color="k", lw=0.8)
-    ax.set_ylabel("もつれ利用の消去で系にされる仕事 $W$ [$k_BT$]")
-    ax.set_title("(a) 旧コードの −19 $k_BT$ の正体")
+    ax.set_ylabel(r"Work on Memory during Erasure $W$ [$k_BT$]")
+    ax.set_title(r"(a) Resolution of the $-19\,k_BT$ Numerical Artifact")
     ax.set_ylim(min(vals) * 1.15, 1.0)
 
     ax = axes[1]
-    ax.semilogx(rows[:, 0], rows[:, 1], "o-", color="#2980b9", ms=3, label="段1: もつれ利用の抽出")
-    ax.semilogx(rows[:, 0], rows[:, 2], "s-", color="#c0392b", ms=3, label="段2: もつれ再生成 (消去)")
-    ax.semilogx(rows[:, 0], rows[:, 3], "k-", lw=2.2, label="1サイクルの正味")
+    ax.semilogx(rows[:, 0], rows[:, 1], "o-", color="#2980b9", ms=3, label="Stage 1: Entangled Work Extraction")
+    ax.semilogx(rows[:, 0], rows[:, 2], "s-", color="#c0392b", ms=3, label="Stage 2: Entanglement Reset")
+    ax.semilogx(rows[:, 0], rows[:, 3], "k-", lw=2.2, label=r"Net Cyclic Work $W_{\mathrm{net}}$")
     ax.axhline(LN2, color="#c0392b", ls=":", lw=1)
     ax.axhline(-LN2, color="#2980b9", ls=":", lw=1)
     ax.axhline(0, color="gray", lw=0.8)
-    ax.set_xlabel("各段のプロトコル時間 $\\tau$ [$1/\\gamma_0$ 単位系]")
-    ax.set_ylabel("系にされた仕事 [$k_BT$]")
-    ax.set_title("(b) サイクル全体では正味 $W \\geq 0$")
+    ax.set_xlabel(r"Protocol Duration $\tau$ [$1/\gamma_0$]")
+    ax.set_ylabel(r"Work Done on Working System [$k_BT$]")
+    ax.set_title(r"(b) Net Cyclic Work $W_{\mathrm{net}} \geq 0$ Across All $\tau$")
     ax.legend(fontsize=8, loc="center right")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG_DIR, "fig_entangled_erasure.pdf"))

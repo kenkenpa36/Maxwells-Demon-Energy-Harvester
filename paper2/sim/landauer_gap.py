@@ -81,20 +81,20 @@ def main():
 
     ax = axes[0]
     categories = [
-        "Landauer\n理論限界",
-        "コロイド実験\n(Nature 2012)",
-        "超伝導SFQ\n(論理単体)",
-        "最先端CMOS\n(論理単体)",
-        "ESP32-C3 v2\n(自律約365ms)",
-        "ESP32-C3 v1\n(待機約3.2s)",
+        "Landauer\nLimit",
+        "Colloidal Exp.\n(Nature 2012)",
+        "Supercond. SFQ\n(Logic Gate)",
+        "Advanced CMOS\n(Logic Gate)",
+        "ESP32-C3 v2\n(~365ms Wake)",
+        "ESP32-C3 v1\n(~3.2s Wake)",
     ]
     energies_J = [E_LANDAUER, E_BERUT2012, E_SFQ, E_CMOS, E_ESP32_V2_WAKE, E_ESP32_V1_WAKE]
     colors = ["#27ae60", "#2ecc71", "#2980b9", "#8e44ad", "#e67e22", "#c0392b"]
 
     bars = ax.bar(categories, energies_J, color=colors)
     ax.set_yscale("log")
-    ax.set_ylabel("1操作/制御あたりの消費エネルギー [J]")
-    ax.set_title("(a) 理論極限と実機コントローラのエネルギー比較")
+    ax.set_ylabel("Energy Dissipated per Operation / Wake [J]")
+    ax.set_title("(a) Theoretical Limits vs. Physical Microcontrollers")
     ax.grid(True, which="both", ls=":", alpha=0.3)
 
     for bar, val in zip(bars, energies_J):
@@ -109,7 +109,7 @@ def main():
         )
 
     ax = axes[1]
-    items = ["TEG発電\n(10秒間)", "Deep Sleep\n(10秒間)", "起床制御\n(v2 約365ms)", "SOS発光\n(100ms)", "正味余剰\n(自律給電)"]
+    items = ["TEG Harvest\n(10 s)", "Deep Sleep\n(10 s)", "Wake Control\n(v2 ~365 ms)", "SOS Optical\n(100 ms)", "Net Surplus\n(Self-Powered)"]
     vals_mJ = [
         100.0,
         -0.165,
@@ -121,8 +121,8 @@ def main():
 
     b2 = ax.bar(items, vals_mJ, color=bar_colors)
     ax.axhline(0, color="k", lw=0.8)
-    ax.set_ylabel("1サイクル (10秒) あたりのエネルギー収支 [mJ]")
-    ax.set_title("(b) 構成D 設計仕様に基づく自律収支 (ΔT=15℃)")
+    ax.set_ylabel("Energy Budget per 10 s Cycle [mJ]")
+    ax.set_title(r"(b) Configuration D Energy Balance ($\Delta T = 15^\circ\mathrm{C}$)")
     ax.grid(True, ls=":", alpha=0.3)
 
     for bar, val in zip(b2, vals_mJ):
